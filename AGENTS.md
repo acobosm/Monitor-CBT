@@ -26,14 +26,15 @@ uses it; clients receive Excel reports on request.
 - Storage: Cloudflare D1, two databases: `monitor-cbt-statistics-db` (daily snapshots) and `monitor-cbt-audit-db` (audit log).
 - Access: Cloudflare Access (Zero Trust) with email one-time PIN in front of the Worker's `workers.dev` URL.
 - Tests: Vitest with `@cloudflare/vitest-pool-workers`.
-- Node.js 22 LTS (>= 22.23.4, security release of 2026-10-21).
+- Node.js 22 LTS (>= 22.23.4, security release of 2026-10-21) and npm >= 11.21.1.
 
 ## Commands
-<!-- To be confirmed when the code exists (spec 001). -->
 - `npm run dev`: local Worker + UI.
 - `npm run typecheck`: TypeScript check.
 - `npm test`: Vitest.
-- `npm run deploy`: deploy to production (only with user authorization).
+- `npm run build`: build the UI and the Worker (removes the `.dev.vars` copy from `dist/`).
+- `npm run cf-typegen`: regenerate `worker-configuration.d.ts`.
+- `npm run deploy`: deploy to production (only with user authorization; first run in T12).
 
 ## Non-negotiable rules (details in docs/constitution.md)
 <!-- UNIVERSAL: no modificar sin que el usuario lo pida. -->

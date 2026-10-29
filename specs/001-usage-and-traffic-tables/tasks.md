@@ -3,9 +3,10 @@ Spec: `spec.md` · Plan: `plan.md`
 Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]` user-tested and committed (with commit id).
 <!-- UNIVERSAL: tareas chicas, que se terminan, prueban y commitean en una sesión corta. Cada una indica los requisitos que cubre. Al terminar una tarea se agrega debajo una nota "Done <fecha>: …" con lo verificado y lo que cambió respecto al plan. -->
 
-- [x] **T1. Analytics token.** Write the token guide in `docs/SERVICES_AND_COSTS.md`; the owner creates `monitor-cbt-analytics-readonly` and stores it in Bitwarden and `web/.dev.vars`. (Definition of Done)
-  Done 2026-10-29: guide written; token created with 3 accounts and 3 zones (`cobtec.net` DNS stays at GoDaddy); `tokens/verify` returns `active`, expires 2027-01-01T04:59:59Z (2026-12-31 ECT, owner's common token date); `web/.dev.vars` ignored by git (checked with `git check-ignore`).
-- [ ] **T2. Skeleton.** `package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `wrangler.jsonc`, `.dev.vars.example`, minimal Worker that responds. (—)
+- [✓] **T1. Analytics token.** Write the token guide in `docs/SERVICES_AND_COSTS.md`; the owner creates `monitor-cbt-analytics-readonly` and stores it in Bitwarden and `web/.dev.vars`. (Definition of Done)
+  Done 2026-10-29: guide written; token created with 3 accounts and 3 zones (`cobtec.net` DNS stays at GoDaddy); `tokens/verify` returns `active`, expires 2027-01-01T04:59:59Z (2026-12-31 ECT, owner's common token date); `web/.dev.vars` ignored by git (checked with `git check-ignore`). Commit `89b60dd`.
+- [x] **T2. Skeleton.** `package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `wrangler.jsonc`, `.dev.vars.example`, minimal Worker that responds. (—)
+  Done 2026-10-29: typecheck and 1 test green, `npm audit` 0 vulnerabilities; owner saw the page, footer and `/api/ping` with `npm run dev`. Changes from the plan: npm 11 required (npm 10 crash), `@cloudflare/vitest-plugin` instead of the renamed pool, wrangler 4.154.0 / vite-plugin 1.66.0 / vitest-plugin 1.4.9 taken under 2 weeks old for security fixes, `vitest` 4.x, `@types/react*` added, `tsconfig.ui.json` added, `index.html` at `web/`, `build` deletes the `.dev.vars` copy, `allowScripts` for `esbuild` and `workerd`.
 - [ ] **T3. Discovery.** `settings` query plus one real test read per zone and account; record what the Free plan offers (IPs included) and adjust `docs/DATA_MODEL.md`. (R27, R41 partly)
 - [ ] **T4. Day and token logic.** Pure modules `src/logic/days.ts`, `src/logic/token.ts` with tests. (R8–R10, R13, R30–R32)
 - [ ] **T5. Access and audit.** `src/access.ts`, `src/db/audit.ts`, `migrations/audit/0001_init.sql`. (R1–R4, R6, R7)

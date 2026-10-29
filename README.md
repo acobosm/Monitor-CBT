@@ -3,12 +3,11 @@ Private dashboard (reached through monitor.cobtec.net) that shows Cloudflare usa
 traffic) for the websites COBTEC manages, using a read-only Cloudflare Analytics token.
 
 ## Requirements
-- Node.js >= 22.23.4 and npm.
+- Node.js >= 22.23.4 and npm >= 11.21.1.
 - Access to the COBTEC Cloudflare account (212a78d4cea6e1047658a98ba757cd2b) to deploy.
 - A read-only Cloudflare analytics token (see `docs/SERVICES_AND_COSTS.md`). It is never stored in the repo.
 
 ## Getting started
-<!-- To be confirmed when the code exists (spec 001). -->
 1. `cd web && npm install`
 2. Copy `web/.dev.vars.example` to `web/.dev.vars` and set `CLOUDFLARE_ANALYTICS_TOKEN`
    (from the password manager), `ALLOWED_EMAILS` and the local Access bypass flag. `web/.dev.vars` is ignored by git.

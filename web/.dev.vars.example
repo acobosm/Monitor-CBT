@@ -1,0 +1,7 @@
+# Copy to .dev.vars (ignored by git) and fill in. Never commit real values.
+# Read-only analytics token (see docs/SERVICES_AND_COSTS.md, "Analytics token guide").
+CLOUDFLARE_ANALYTICS_TOKEN=
+# Comma-separated emails allowed to use the dashboard.
+ALLOWED_EMAILS=
+# "true" skips the Access check, only for requests from localhost. Never set in production.
+LOCAL_ACCESS_BYPASS=

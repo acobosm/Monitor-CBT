@@ -6,12 +6,12 @@ _Last updated: 2026-10-29_
 ## Where we are
 - Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: spec 001 in progress; T1 (analytics token) done, no code yet.
-- Last confirmed commit: `095a5af` (MEMORY update, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
+- Project phase: spec 001 in progress; T1 and T2 (skeleton in `web/`) done.
+- Last confirmed commit: `89b60dd` (T1, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
-1. Task T2: project skeleton in `web/` (the agent shows the plan and the dependency install commands first).
+1. Task T3: discovery (`settings` query and one real read per zone and account; record what the Free plan offers).
 
 ## Known pending tasks
 - Analytics token `monitor-cbt-analytics-readonly` expires 2026-12-31 23:59 ECT (owner's common date for all tokens): renew from 2026-12-01 following `docs/SERVICES_AND_COSTS.md`.

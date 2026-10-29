@@ -16,10 +16,16 @@
 
 ## Requirements
 - Node.js >= 22.23.4 (22 LTS line). Move to Node 24 LTS before April 2027, when the 22 line reaches end of life.
-- npm. wrangler is a project dependency, used with `npx wrangler` (no global install).
+- npm >= 11.21.1 (`npm install -g npm@11.21.1`): npm 10 crashes resolving the test plugin's peer
+  dependencies (`Cannot read properties of null (reading 'edgesOut')`). Enforced by `engines` +
+  `engine-strict`. wrangler is a project dependency, used with `npx wrangler` (no global install).
 - Access to the COBTEC Cloudflare account to deploy.
 - The read-only analytics token, kept in the owner's password manager.
-- No pinned dependency versions for now; any pinned version is listed here with its reason.
+- Every dependency is pinned to an exact version (`save-exact=true` in `web/.npmrc`). Rule: versions
+  published at least 2 weeks earlier. Exception (2026-10-29): `wrangler` 4.154.0, `@cloudflare/vite-plugin`
+  1.66.0 and `@cloudflare/vitest-plugin` 1.4.9 were 1-2 days old, taken because they fix known
+  vulnerabilities (undici TLS bypass, sharp, zod) in 4.151.0 / 1.64.0.
+- `vitest` stays on 4.x until the Cloudflare test plugin and the rest of the toolchain are checked with 5.x.
 
 ## Initial Local Setup
 1. `cd web && npm install`
@@ -70,3 +76,18 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
 
 ## Known Details
 <!-- Detalles técnicos que un programador nuevo debe conocer (limitaciones, valores escritos en el código, rarezas de herramientas). Se va llenando durante el desarrollo. -->
+- **Install scripts (npm 11):** dependency install scripts are blocked unless listed in `allowScripts`
+  in `web/package.json`, pinned per version. Only `esbuild` and `workerd` are approved. After an update
+  that changes their version, review and run `npm install-scripts approve esbuild workerd` and
+  `npm rebuild esbuild workerd`; `npm install-scripts ls` must list nothing.
+- **`.dev.vars` copy in the build:** `vite build` (Cloudflare Vite plugin) writes the local secrets to
+  `dist/monitor_cbt/.dev.vars` for `vite preview`. The `build` script deletes it right after; do not use
+  `vite preview`, and never run `vite build` directly.
+- **Tests read `.dev.vars`:** the Vitest plugin loads the real local token as a binding. Tests must never
+  call Cloudflare (mocked fixtures only); from T4 tests set dummy bindings explicitly.
+- **Two tsconfigs:** `tsconfig.json` (Worker, tests, configs, Workers runtime types) and
+  `tsconfig.ui.json` (UI, DOM types); browser and Workers types conflict in one project.
+  `npm run typecheck` runs both.
+- **Generated types:** `worker-configuration.d.ts` comes from `npm run cf-typegen` (`wrangler types`);
+  rerun it after changing `wrangler.jsonc` or the variable names in `.dev.vars`. It holds names only, never values.
+- **`index.html`** lives in `web/` (Vite root); UI code lives in `web/ui/`.
