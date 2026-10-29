@@ -1,0 +1,114 @@
+# Plan — 001 Usage and traffic tables
+Spec: `spec.md` (approved 2026-10-29).
+<!-- UNIVERSAL: el plan se escribe después de cerrar las clarificaciones de la spec, y el usuario lo aprueba antes de escribir código. -->
+
+## Design principle
+- All decision logic lives in pure modules tested without the cloud: % used, thresholds, projections,
+  R2 Class A/B mapping, day and missing-day calculation, parsing GraphQL responses, top IPs.
+- The pieces that touch the cloud are thin: the GraphQL client only sends queries and returns JSON;
+  routes only validate access, read D1 and respond; the daily task only orchestrates
+  (discover, fetch, store, backfill, purge).
+- The UI only displays: it never computes states or percentages; the API sends them ready.
+
+## Dependencies
+| Package | Purpose | License |
+|---|---|---|
+| `hono` | API routes in the Worker | MIT |
+| `react`, `react-dom` | UI | MIT |
+| `vite`, `@vitejs/plugin-react`, `@cloudflare/vite-plugin` | Build the UI and the Worker together | MIT |
+| `typescript` | Type checking | Apache-2.0 |
+| `wrangler` | Local development and deploy | MIT / Apache-2.0 |
+| `vitest`, `@cloudflare/vitest-pool-workers` | Tests | MIT |
+| `jose` | Access JWT validation (standard, audited library; hand-made WebCrypto validation is too risky) | MIT |
+| `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono` | Bundled fonts (no Google Fonts) | OFL-1.1 |
+
+No others: dates and numbers use the built-in `Intl`; tables are plain HTML.
+
+## New files
+All paths are under `web/`.
+
+| File | Content |
+|---|---|
+| `package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts` | Project setup and scripts (`dev`, `typecheck`, `test`, `deploy`). |
+| `wrangler.jsonc` | Worker `monitor-cbt`, two D1 bindings, cron `0 1 * * *`, `workers_dev: false`, preview URLs off, Custom Domain `monitor.cobtec.net`, Access team domain and AUD. |
+| `.dev.vars.example` | `CLOUDFLARE_ANALYTICS_TOKEN`, `ALLOWED_EMAILS`, local Access bypass flag, with no real values. |
+| `src/index.ts` | Hono app, static UI serving, `scheduled` handler. |
+| `src/access.ts` | Access JWT validation, `ALLOWED_EMAILS`, local bypass (R1–R4). |
+| `src/routes/api.ts` | `/api/usage`, `/api/sites/:id`, `/api/token`, audit recording (R6–R7). |
+| `src/cloudflare/graphql.ts` | GraphQL client (sends a query, returns JSON). |
+| `src/cloudflare/queries.ts` | Queries: usage, traffic, countries, IPs, security events, `settings`. |
+| `src/cloudflare/token.ts` | `tokens/verify` call. |
+| `src/logic/usage.ts` | Pure: %, thresholds, projections, 7-day peak, R2 Class A/B (R14–R20). |
+| `src/logic/traffic.ts` | Pure: traffic, countries and top 20 IP parsing (R21–R26, R29). |
+| `src/logic/token.ts` | Pure: remaining days and state (R8–R13). |
+| `src/logic/days.ts` | Pure: UTC day, missing days, 13-month cutoff (R30–R32). |
+| `src/cron.ts` | Daily task orchestration (R28–R33, R41). |
+| `src/db/statistics.ts`, `src/db/audit.ts` | Reads and writes for each database. |
+| `config/sites.json`, `config/limits.json` | Monitored sites; Free limits, thresholds and check dates. |
+| `migrations/statistics/0001_init.sql`, `migrations/audit/0001_init.sql` | Initial tables (see Data). |
+| `ui/index.html`, `ui/main.tsx`, `ui/App.tsx` | UI entry and routing. |
+| `ui/pages/Home.tsx`, `ui/pages/Usage.tsx`, `ui/pages/Site.tsx` | Module selector; plan usage; site traffic. |
+| `ui/components/DataTable.tsx`, `StatusBadge.tsx`, `TokenNotice.tsx`, `Layout.tsx` | Tables, state badge, token notice, menu with "Salir" and footer. |
+| `ui/styles.css` | CBT tokens as CSS variables, no decoration. |
+| `test/*.test.ts`, `test/fixtures/` | One test file per module; sample GraphQL responses with dummy data. |
+
+## Modified files
+| File | Change |
+|---|---|
+| `docs/SERVICES_AND_COSTS.md` | New section with the analytics token guide (create, store, renew, revoke); real usage figures. |
+| `docs/DATA_MODEL.md` | Final fields after discovery; real size. |
+| `docs/DEVELOPMENT.md` | Known Details found during development. |
+| `docs/LEGAL.md` | Licenses confirmed against each package's `package.json`. |
+| `README.md`, `AGENTS.md` | Confirmed commands (remove "to be confirmed"). |
+| `MEMORY.md` | Status at session close. |
+
+## Data
+- Migrations: `0001_init.sql` creates the tables of `docs/DATA_MODEL.md` in each database:
+  `usage_daily`, `traffic_daily`, `country_daily`, `ip_daily`, `dataset_availability` in statistics;
+  `audit_event` in audit.
+- Idempotent writes: each day is stored with `INSERT … ON CONFLICT … DO UPDATE` on each table's key (R30).
+- Traffic counts only real visitors (`requestSource: "eyeball"`).
+- Optional `host` field per site in `sites.json`: when set, traffic is filtered by that hostname.
+  MOHAMED-BORAEI uses `www.mohamedboraei.com`, so the apex 301 redirects are not counted as visits.
+  Other sites count the whole zone unless a `host` is set.
+
+## Security
+- Access at the edge protects everything, UI files included (they hold no data). The Worker validates
+  the JWT and the allowlist on every `/api/*` route (R1–R3).
+- Input validation: the site id must exist in `sites.json`; the day must be `YYYY-MM-DD` and within
+  the history. Otherwise the API responds 400 with no data.
+- The token lives only in the Worker environment. Cloudflare errors are sanitized before reaching
+  the UI: no raw error, no token (R5).
+- Local bypass works only when the flag is set and the host is `localhost`. The flag is never loaded
+  in production; this is a step of the deploy checklist (R4).
+- Concurrent runs (manual and scheduled task at once) are safe: writes replace rather than duplicate
+  (R30). The dashboard never writes statistics.
+
+## Risks
+| Risk | Mitigation |
+|---|---|
+| 50 subrequests per invocation on Workers Free; a naive daily task makes ~45 queries and backfill would exceed it | One GraphQL query per account and one per zone (several datasets per query with aliases); cap the number of backfilled days per run. |
+| 10 ms CPU per invocation | Keep JSON per query small; if not enough, split the work across several crons (5 per account). |
+| `clientIP` not available on Free | R27 shows the notice; everything else works. |
+| 300 GraphQL queries per 5 minutes | About 15 queries per daily run and about 10 per dashboard open; the current-day read is cached for 60 seconds. |
+| One-time PIN might not be included in Access Free | Checked while configuring Access, before the first deploy. |
+| IPs are personal data | Top 20 per kind, deleted after 13 months, visible only to the owner. |
+
+## Testing strategy
+Automated (`npm test`):
+
+| What | How | Requirements |
+|---|---|---|
+| Pure modules | Unit tests with dummy-data fixtures | R8–R10, R13–R27, R29–R32 |
+| Access | Dummy JWTs signed with a test key; Access public key mocked | R1–R4 |
+| API routes | Vitest in the Workers pool with local D1 databases | R5–R7, R11, R12, R34, R35 |
+| Daily task | Invoke the `scheduled` handler with mocked Cloudflare responses | R28, R33, R41 |
+| UI | Render components to text with `react-dom/server` (bundled with React) and check the texts | R36–R39 |
+
+No extra test dependencies. Interaction (clicks) is tested by the user.
+
+User testing:
+1. Locally with `npm run dev` and the real token: go through home, plan usage and each site; check
+   that figures resemble the Cloudflare dashboard.
+2. In production after the first deploy: sign-in with the one-time code, rejection of an email not
+   in the allowlist, and the "Salir" button (R40).
