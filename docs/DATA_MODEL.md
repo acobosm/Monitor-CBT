@@ -5,13 +5,13 @@
 |---|---|
 | D1 `monitor-cbt-statistics-db` | Daily history of plan usage, traffic per site, countries and top IPs. |
 | D1 `monitor-cbt-audit-db` | Audit log: data views and exports. Kept separate so restoring statistics (Time Travel) never erases audit records, and so it can be backed up and exported on its own. |
-| Config file in the repo `web/config/sites.json` | Monitored sites (id, name, account ID, zone). Changed by commit; rarely changes. |
+| Config file in the repo `web/config/sites.json` | Monitored accounts and sites (id, name, account ID, zone, zone ID). Changed by commit; rarely changes. |
 | Config file in the repo (e.g. `web/config/limits.json`) | Free plan limits, each with the date it was checked on the provider's pricing page. Changed by commit, so changes have history. |
 | Worker secret `ALLOWED_EMAILS` (and `web/.dev.vars` locally) | Allowed emails with their role. Not in the repo: emails are personal data. |
 | Worker secret `CLOUDFLARE_ANALYTICS_TOKEN` (and `web/.dev.vars` locally) | Read-only Cloudflare analytics token. |
 
 ## Entities
-<!-- Initial proposal: exact fields are confirmed in spec 001 after checking what the GraphQL API exposes on the Free plan. -->
+<!-- Fields confirmed by the T3 discovery (2026-10-29, `web/scripts/discover.mjs`); sources in "GraphQL sources" below. -->
 All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 
 ### Site (config file `web/config/sites.json`, not a table)
@@ -20,7 +20,8 @@ All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 | id | text | yes | no | Stable id: `cobtec`, `soma`, `boraei`, `mohamed-boraei`. |
 | name | text | yes | no | Display name (COBTEC, SOMA, BORAEI, MOHAMED-BORAEI). |
 | accountId | text | yes | no | Cloudflare account ID. |
-| zone | text | yes | no | Zone name (e.g. `somabwc.com`). |
+| zone | text | no | no | Zone name (e.g. `somabwc.com`). Absent for COBTEC: `cobtec.net` DNS is at GoDaddy, so only its account usage is read. |
+| zoneTag | text | no | no | Zone ID, required by GraphQL (e.g. `e0fb73db5802715db5c839304a86c43e`). Present whenever `zone` is. |
 | host | text | no | no | Optional hostname filter for traffic (e.g. `www.mohamedboraei.com`). |
 
 ### usage_daily (`monitor-cbt-statistics-db`)
@@ -29,7 +30,7 @@ All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 | day | text | yes | no | UTC day. |
 | account_id | text | yes | no | Cloudflare account ID. |
 | product | text | yes | no | `workers`, `d1` or `r2`. |
-| metric | text | yes | no | E.g. `requests`, `rows_read`, `rows_written`, `storage_bytes`, `class_a_ops`, `class_b_ops`. |
+| metric | text | yes | no | `requests` (workers); `rows_read`, `rows_written`, `storage_bytes` (d1); `class_a_ops`, `class_b_ops`, `storage_bytes` (r2). Summed over all scripts, databases or buckets of the account. |
 | value | integer | yes | no | Value for that day. |
 | fetched_at | text | yes | no | When it was read from the API (ISO UTC). |
 
@@ -40,10 +41,10 @@ Key: (day, account_id, product, metric).
 |---|---|---|---|---|
 | day | text | yes | no | UTC day. |
 | site_id | text | yes | no | Site id from `sites.json`. |
-| requests | integer | yes | no | Requests. |
-| visits | integer | no | no | Visits, if exposed on the Free plan. |
-| page_views | integer | no | no | Page views, if exposed on the Free plan. |
-| bytes | integer | no | no | Bytes served. |
+| requests | integer | yes | no | Requests from real visitors (`requestSource = eyeball`), filtered by `host` when set. |
+| visits | integer | yes | no | Visits (`sum.visits`), same filter. |
+| page_views | integer | no | no | Page views of the whole zone (only in `httpRequests1dGroups`, which has no host or source filter). |
+| bytes | integer | yes | no | Bytes served (`sum.edgeResponseBytes`), same filter as requests. |
 | fetched_at | text | yes | no | When it was read from the API. |
 
 Key: (day, site_id).
@@ -53,8 +54,8 @@ Key: (day, site_id).
 |---|---|---|---|---|
 | day | text | yes | no | UTC day. |
 | site_id | text | yes | no | Site id. |
-| country | text | yes | no | ISO 3166-1 alpha-2 code. |
-| requests | integer | yes | no | Requests from that country. |
+| country | text | yes | no | ISO 3166-1 alpha-2 code (`clientCountryName`). |
+| requests | integer | yes | no | Requests from that country (real visitors, same filter as `traffic_daily`). |
 
 Key: (day, site_id, country).
 
@@ -66,10 +67,12 @@ Key: (day, site_id, country).
 | kind | text | yes | no | `traffic` (top by request volume) or `security` (top by security events: blocked or challenged). |
 | ip | text | yes | **yes (personal data)** | Visitor IP address. |
 | country | text | no | no | ISO country code of the IP. |
-| requests | integer | yes | no | Requests from that IP that day. |
-| last_seen_at | text | no | no | Last request time that day (ISO UTC). |
+| action | text | no | no | `security` only: `block` or `challenge` family (`securityAction`), shown as "Bloqueada" / "Desafiada". |
+| requests | integer | yes | no | Requests (traffic) or security events (security) from that IP that day. |
+| last_seen_hour | text | no | no | Start of the last hour the IP was seen that day (ISO UTC, from `datetimeHour`); shown as an ECT hour range (P5). |
 
 Key: (day, site_id, kind, ip). Only the top 20 IPs per site, per day and per kind are stored (up to 40).
+An IP with more than one security action that day keeps the one with most events.
 
 ### dataset_availability (`monitor-cbt-statistics-db`)
 | Field | Type | Required | Sensitive | Description |
@@ -101,13 +104,35 @@ Key: (scope, tag, dataset). Refreshed on every daily run.
 | Visitor IPs (`ip_daily.ip`) | **Yes, personal data** | 13 months | Deleted by the daily task |
 | Email in the audit log (`audit_event.email`) | **Yes, personal data** | No automatic deletion for now | Reviewed as usage grows |
 
-Size estimate (to be verified in spec 001): about 390 rows per day (usage ~24, traffic 4,
-countries ~200, IPs up to 160), roughly 40 KB per day or 15 MB per year. D1 Free plan limit: 500 MB per
+Size estimate (after T3, 3 sites): about 300 rows per day (usage ~21, traffic 3, countries ~150,
+IPs up to 120), roughly 30 KB per day or 11 MB per year; to be checked with real data after T12. D1 Free plan limit: 500 MB per
 database (checked on 2026-10-28 at developers.cloudflare.com/d1/platform/limits).
 
 Pending legal question (see `docs/LEGAL.md`): the legal basis for storing visitor IPs would be
 legitimate interest in security under Ecuador's personal data protection law (LOPDP); to be
 confirmed with a legal advisor, together with whether the clients' privacy policies mention it.
+
+## GraphQL sources (T3 discovery, 2026-10-29)
+Checked with the `settings` node and one real read per account and zone. All datasets below are
+enabled on the Free plan for the 3 accounts and 3 zones.
+
+| Data | Dataset | Fields | History | Max range per query |
+|---|---|---|---|---|
+| Workers requests | `workersInvocationsAdaptive` | `sum.requests` by `scriptName` | 90 days | 32 days |
+| D1 rows read / written | `d1AnalyticsAdaptiveGroups` | `sum.rowsRead`, `sum.rowsWritten` by `databaseId` | 90 days | 32 days |
+| D1 storage | `d1StorageAdaptiveGroups` | `max.databaseSizeBytes` by `databaseId` | 90 days | 32 days |
+| R2 operations | `r2OperationsAdaptiveGroups` | `sum.requests` by `actionType` (mapped to Class A/B) | 90 days | 32 days |
+| R2 storage | `r2StorageAdaptiveGroups` | `max.payloadSize`, `max.metadataSize`, `max.objectCount` by `bucketName` | 90 days | 32 days |
+| Requests, visits, bytes, countries | `httpRequestsAdaptiveGroups` | `count`, `sum.visits`, `sum.edgeResponseBytes`, `clientCountryName`; filters `requestSource`, `clientRequestHTTPHost` | 31 days | 30 days |
+| Top IPs by traffic | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `clientCountryName`; then `datetimeHour` for the top 20 | 31 days | 30 days |
+| Top IPs by security | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `securityAction`, filtered to block/challenge actions | 31 days | 30 days |
+| Page views | `httpRequests1dGroups` | `sum.pageViews` | 365 days | 365 days |
+
+- `firewallEventsAdaptiveGroups` is **disabled** on Free; `firewallEventsAdaptive` (raw events) is enabled
+  but not used, because grouped requests give the same counts and are not cut at 10,000 rows.
+- Adaptive datasets are sampled (`avg.sampleInterval`); counts are estimates under high traffic.
+- "History" is counted back from the query time, so the backfill covers 30 complete days (P6).
+- Account datasets keep 90 days, more than the 30-day backfill.
 
 ## Backups and restore
 Data older than the Cloudflare API retention cannot be fetched again: if it is lost from D1, it is

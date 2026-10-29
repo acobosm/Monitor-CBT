@@ -56,7 +56,8 @@ in screenshots.
 6. Client IP Address Filtering: empty (the Worker leaves from changing Cloudflare IPs).
 7. TTL: start today, end on the owner's common token expiration date (all the owner's API tokens expire
    on the same day; first token: 2026-10-29 to 2026-12-31 23:59 ECT = 2027-01-01T04:59:59Z). About 6
-   months recommended, never more than 1 year.
+   months recommended, never more than 1 year. **Start date = today**: if it is left on a later day, GraphQL
+   answers `401 Authentication error` until then, while `tokens/verify` still says `active`.
 8. Continue to summary: check that only the 2 Read permissions, 3 accounts and 3 zones appear, and
    no "Edit" permission. Then Create Token and copy the value (it is shown only once).
 
@@ -77,11 +78,11 @@ Run from `web/`; it prints only the status and the expiration date (share only t
 ```bash
 TOKEN=$(grep '^CLOUDFLARE_ANALYTICS_TOKEN=' .dev.vars | cut -d= -f2-)
 curl -s -H "Authorization: Bearer $TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify \
-  | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["success"], (r.get("result") or {}).get("status"), (r.get("result") or {}).get("expires_on"), [e.get("message") for e in r.get("errors", [])])'
+  | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["success"], (r.get("result") or {}).get("status"), (r.get("result") or {}).get("not_before"), (r.get("result") or {}).get("expires_on"), [e.get("message") for e in r.get("errors", [])])'
 unset TOKEN
 ```
 
-Expected: `True active <expiration date> []`.
+Expected: `True active <start date> <expiration date> []`, with the start date not in the future.
 
 ### 5. Renew (about 30 days before expiration, or when the dashboard shows "Por vencer")
 1. Create a new token with the same settings, named `monitor-cbt-analytics-readonly-YYYY-MM`.

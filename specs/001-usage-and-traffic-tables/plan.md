@@ -92,7 +92,8 @@ All paths are under `web/`.
 |---|---|
 | 50 subrequests per invocation on Workers Free; a naive daily task makes ~45 queries and backfill would exceed it | One GraphQL query per account and one per zone (several datasets per query with aliases); cap the number of backfilled days per run. |
 | 10 ms CPU per invocation | Keep JSON per query small; if not enough, split the work across several crons (5 per account). |
-| `clientIP` not available on Free | R27 shows the notice; everything else works. |
+| A dataset is disabled on Free | T3 (2026-10-29): everything needed is enabled, `clientIP` included; only `firewallEventsAdaptiveGroups` is disabled and is not used (security IPs come from `httpRequestsAdaptiveGroups` filtered by `securityAction`). R27 covers future changes. |
+| Adaptive datasets are sampled | Counts are estimates under high traffic; at current volumes (hundreds to a few thousand requests per day) they are practically exact. |
 | 300 GraphQL queries per 5 minutes | About 15 queries per daily run and about 10 per dashboard open; the current-day read is cached for 60 seconds. |
 | One-time PIN or one-click Access on `workers.dev` might not be included in Access Free | Checked while configuring Access, before the first deploy. If one-click is not available, create the Access application for the `workers.dev` hostname by hand. |
 | The `workers.dev` URL is reachable before Access is on | First deploy ships with Access already configured, or with the Worker rejecting everything (fail closed, R3) until it is. |

@@ -17,7 +17,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 5. Traffic per site: requests, visits, page views, bytes, countries, top 20 IPs by traffic and top 20
    IPs by security events.
 6. Remaining days of the token, with a warning.
-7. Daily task into D1, backfill of missing days (up to 31) and deletion of IPs older than 13 months.
+7. Daily task into D1, backfill of missing days (up to 30) and deletion of IPs older than 13 months.
 8. Audit of data views in `monitor-cbt-audit-db`.
 9. UI: home page with the module selector "Cloudflare - Consumo y Tráfico" and a dashboard made of
    tables, with the footer "Powered by CBT · © 2026".
@@ -67,15 +67,15 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R22. The system SHALL label the current day's row "Hoy (parcial)".
 - R23. The system SHALL show above the tables the note "Cada día va de 19:00 a 19:00 ECT."
 - R24. The system SHALL show a countries table for the selected day, with requests and % of the total; the last complete day is selected by default and any day in the history can be chosen.
-- R25. The system SHALL show the top 20 IPs by traffic for the selected day, with IP, country, requests and last seen time (ECT).
-- R26. The system SHALL show the top 20 IPs by security events for the selected day, with IP, country, number of events, action ("Bloqueada" or "Desafiada") and last seen time (ECT).
+- R25. The system SHALL show the top 20 IPs by traffic for the selected day, with IP, country, requests and the last hour it was seen (ECT, e.g. "14:00–15:00"). (P5)
+- R26. The system SHALL show the top 20 IPs by security events for the selected day, with IP, country, number of events, action ("Bloqueada" or "Desafiada") and the last hour it was seen (ECT). (P5)
 - R27. IF Cloudflare does not offer a data item for that zone on the Free plan (per the discovery query), THEN the system SHALL display "Cloudflare no entrega este dato en el plan gratuito." instead of the table.
 
 ### Daily task and history
 - R28. WHEN the daily task runs (01:00 UTC, 20:00 ECT; P3), the system SHALL fetch the previous UTC day for every account and zone and store it in `monitor-cbt-statistics-db`.
 - R29. The system SHALL store only the top 20 IPs per site, per day and per kind (traffic, security).
 - R30. IF a day is processed twice, THEN the system SHALL replace that day's rows without duplicating them.
-- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 31 days and fill them in.
+- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 30 days and fill them in. (P6)
 - R32. WHEN the daily task runs, the system SHALL delete IPs older than 13 months.
 - R33. IF reading one account or zone fails, THEN the system SHALL continue with the others and log the error; that day stays missing for the backfill.
 - R34. WHEN the dashboard opens, the system SHALL read the current day from the API without storing it, because it is partial.
@@ -113,3 +113,9 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P4.** When is dataset discovery done?
   A (recommended): on every daily run, stored in D1. B: once, with a script run by the owner, stored in configuration.
   **Answer:** A (2026-10-29). Applied in R41; adds the `dataset_availability` table to `docs/DATA_MODEL.md`.
+- **P5.** (From T3 discovery.) Grouped analytics give no exact last-request time per IP. What does "last seen" show?
+  A (recommended): the last hour the IP was seen, with one extra grouped query per site; robust under attacks. B: exact time from raw firewall events; security only, and truncated above 10,000 events per day.
+  **Answer:** A (2026-10-29). Applied in R25 and R26.
+- **P6.** (From T3 discovery.) Zone datasets keep 31 days counted from the query time, so at 01:00 UTC the 31st day back is already partly gone. How many days does the backfill cover?
+  A (recommended): 30 days, always complete. B: 31 days, the last one possibly incomplete.
+  **Answer:** A (2026-10-29). Applied in R31 and scope item 7.

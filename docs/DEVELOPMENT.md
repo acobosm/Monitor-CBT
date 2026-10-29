@@ -91,3 +91,6 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
 - **Generated types:** `worker-configuration.d.ts` comes from `npm run cf-typegen` (`wrangler types`);
   rerun it after changing `wrangler.jsonc` or the variable names in `.dev.vars`. It holds names only, never values.
 - **`index.html`** lives in `web/` (Vite root); UI code lives in `web/ui/`.
+- **Discovery script:** `node scripts/discover.mjs <file.json>` (from `web/`) reads the `settings` node and one
+  test day per account and zone. Read-only, never prints the token, redacts IPs. Its report holds client
+  analytics: write it outside the repo (e.g. a temporary folder), never under `web/`.
