@@ -1,0 +1,18 @@
+{
+  "checkedOn": "2026-10-29",
+  "sources": [
+    "https://developers.cloudflare.com/workers/platform/limits/",
+    "https://developers.cloudflare.com/d1/platform/pricing/",
+    "https://developers.cloudflare.com/r2/pricing/"
+  ],
+  "thresholds": { "amber": 70, "red": 90, "exceeded": 100 },
+  "metrics": [
+    { "product": "workers", "metric": "requests", "period": "daily", "limit": 100000 },
+    { "product": "d1", "metric": "rows_read", "period": "daily", "limit": 5000000 },
+    { "product": "d1", "metric": "rows_written", "period": "daily", "limit": 100000 },
+    { "product": "d1", "metric": "storage_bytes", "period": "total", "limit": 5000000000 },
+    { "product": "r2", "metric": "class_a_ops", "period": "monthly", "limit": 1000000 },
+    { "product": "r2", "metric": "class_b_ops", "period": "monthly", "limit": 10000000 },
+    { "product": "r2", "metric": "storage_bytes", "period": "monthly", "limit": 10000000000 }
+  ]
+}

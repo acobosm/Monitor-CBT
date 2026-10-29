@@ -60,7 +60,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R17. WHERE a metric is daily, the system SHALL show its peak of the last 7 days and the note "Se reinicia a las 19:00 ECT".
 - R18. WHERE a metric is monthly or storage, the system SHALL show the projection "Al ritmo actual llegas al límite en N días" or, if the limit is not reached this month, "Sin riesgo este mes".
 - R19. IF a metric has no limit in `limits.json`, THEN the system SHALL show "Límite no configurado" instead of the percentage.
-- R20. The system SHALL classify R2 operations into Class A and Class B according to the official R2 pricing page.
+- R20. The system SHALL classify R2 operations into Class A and Class B according to the official R2 pricing page; operations not listed there SHALL count as Class A and be listed under the table as "Operaciones de R2 sin clasificar (contadas como Clase A): …". (P7)
 
 ### Traffic per site
 - R21. The system SHALL show, per site, a daily table of the last 30 days with requests, visits, page views and bytes.
@@ -119,3 +119,6 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P6.** (From T3 discovery.) Zone datasets keep 31 days counted from the query time, so at 01:00 UTC the 31st day back is already partly gone. How many days does the backfill cover?
   A (recommended): 30 days, always complete. B: 31 days, the last one possibly incomplete.
   **Answer:** A (2026-10-29). Applied in R31 and scope item 7.
+- **P7.** (From T7.) Real accounts report R2 operations the pricing page does not classify (e.g. `GetBucketNotificationConfiguration`, `GetBucketSippyConfiguration`). How are they counted?
+  A (recommended): as Class A (lowest limit, so the warning is never late), listed under the table. B: as Class B (mostly reads). C: in no class, only listed.
+  **Answer:** A (2026-10-29). Applied in R20.

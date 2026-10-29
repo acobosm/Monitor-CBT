@@ -1,0 +1,32 @@
+{
+  "viewer": {
+    "accounts": [
+      {
+        "workers": [
+          { "sum": { "requests": 1200 }, "dimensions": { "date": "2026-10-27" } },
+          { "sum": { "requests": 300 }, "dimensions": { "date": "2026-10-27" } },
+          { "sum": { "requests": 900 }, "dimensions": { "date": "2026-10-28" } }
+        ],
+        "d1": [
+          { "sum": { "rowsRead": 40000, "rowsWritten": 250 }, "dimensions": { "date": "2026-10-28" } }
+        ],
+        "d1Storage": [
+          { "max": { "databaseSizeBytes": 1000000 }, "dimensions": { "date": "2026-10-28", "databaseId": "db-1" } },
+          { "max": { "databaseSizeBytes": 500000 }, "dimensions": { "date": "2026-10-28", "databaseId": "db-2" } }
+        ],
+        "r2Ops": [
+          { "sum": { "requests": 565 }, "dimensions": { "date": "2026-10-28", "actionType": "GetObject" } },
+          { "sum": { "requests": 26 }, "dimensions": { "date": "2026-10-28", "actionType": "HeadBucket" } },
+          { "sum": { "requests": 2 }, "dimensions": { "date": "2026-10-28", "actionType": "PutObject" } },
+          { "sum": { "requests": 12 }, "dimensions": { "date": "2026-10-28", "actionType": "ListBuckets" } },
+          { "sum": { "requests": 3 }, "dimensions": { "date": "2026-10-28", "actionType": "DeleteObject" } },
+          { "sum": { "requests": 2 }, "dimensions": { "date": "2026-10-28", "actionType": "GetBucketNotificationConfiguration" } }
+        ],
+        "r2Storage": [
+          { "max": { "payloadSize": 2000000, "metadataSize": 1000 }, "dimensions": { "date": "2026-10-28", "bucketName": "bucket-1" } },
+          { "max": { "payloadSize": 500000, "metadataSize": 500 }, "dimensions": { "date": "2026-10-28", "bucketName": "bucket-2" } }
+        ]
+      }
+    ]
+  }
+}

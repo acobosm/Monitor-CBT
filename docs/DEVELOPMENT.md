@@ -105,6 +105,15 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
 - **Generated types:** `worker-configuration.d.ts` comes from `npm run cf-typegen` (`wrangler types`);
   rerun it after changing `wrangler.jsonc` or the variable names in `.dev.vars`. It holds names only, never values.
 - **`index.html`** lives in `web/` (Vite root); UI code lives in `web/ui/`.
+- **Limits:** `web/config/limits.json` holds the Free limits with `checkedOn` (shown as "Límites verificados el …")
+  and the thresholds 70/90/100 %. 1 GB = 1,000,000,000 bytes (Cloudflare's decimal GB). When Cloudflare changes a
+  limit, update the file and `checkedOn` in the same commit.
+- **R2 classes:** the Class A/B/free lists in `src/logic/usage.ts` are copied from the R2 pricing page; operations not
+  listed count as Class A and are named under the table (P7). Recheck the page when one appears.
+- **Usage state vs. display:** the state uses the exact percentage; the shown percentage is truncated to one decimal
+  (69.999 % shows 69.9 % and "Normal").
+- **R2 storage** is compared as the latest daily peak against 10 GB (conservative: the bill uses the monthly average
+  of daily peaks).
 - **Discovery script:** `node scripts/discover.mjs <file.json>` (from `web/`) reads the `settings` node and one
   test day per account and zone. Read-only, never prints the token, redacts IPs. Its report holds client
   analytics: write it outside the repo (e.g. a temporary folder), never under `web/`.

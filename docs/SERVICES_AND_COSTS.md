@@ -15,9 +15,9 @@ Inventory of every account and service the project depends on. Limits must be ch
 ## Plans, limits and current usage
 | Service | Plan | Relevant limits (checked on: date) | Current usage | Monthly cost |
 |---|---|---|---|---|
-| Workers | Free | 100,000 requests/day (reset 00:00 UTC); 10 ms CPU per invocation, cron included; 50 subrequests per invocation; 5 cron triggers per account (2026-10-28) | Pending (spec 001) | $0 |
-| D1 | Free | 5 M rows read/day; 100,000 rows written/day (reset 00:00 UTC); 5 GB total; 500 MB per database; 10 databases; Time Travel 7 days (2026-10-28) | Pending (spec 001) | $0 |
-| R2 | Free | 10 GB-month; 1 M Class A ops/month; 10 M Class B ops/month. Not used by this app; measured in the monitored accounts (2026-10-28) | Not used | $0 |
+| Workers | Free | 100,000 requests/day (reset 00:00 UTC); 10 ms CPU per invocation, cron included; 50 subrequests per invocation; 5 cron triggers per account (2026-10-28, rechecked 2026-10-29) | Pending (spec 001) | $0 |
+| D1 | Free | 5 M rows read/day; 100,000 rows written/day (reset 00:00 UTC); 5 GB total; 500 MB per database; 10 databases; Time Travel 7 days; 50 queries per invocation, a `batch()` counts as one; 100 bound parameters per query (2026-10-28, rechecked 2026-10-29) | Pending (spec 001) | $0 |
+| R2 | Free | 10 GB-month (average of the daily peak); 1 M Class A ops/month; 10 M Class B ops/month; deletes are free. Not used by this app; measured in the monitored accounts. Class lists copied into `web/src/logic/usage.ts` (2026-10-28, rechecked 2026-10-29) | Not used | $0 |
 | GraphQL Analytics API | Included | 300 queries per 5 minutes; adaptive datasets keep at least 31 days on every plan; up to 10 zones per query (2026-10-28) | Pending (spec 001) | $0 |
 | Zero Trust (Access) | Free | 50 users; sign-in logs kept up to 24 hours. One-time PIN and one-click Access on `workers.dev` availability on Free not stated in the docs: verify in the dashboard (2026-10-28) | 1 user | $0 |
 
