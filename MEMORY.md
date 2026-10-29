@@ -4,14 +4,14 @@ _Last updated: 2026-10-29_
 <!-- UNIVERSAL: este archivo es una foto del estado actual, no una bitácora. Se reescribe al cerrar cada sesión y se mantiene corto (unas 30 líneas). La historia vive en git y en las specs. -->
 
 ## Where we are
-- Working branch: `001-usage-and-traffic-tables` (git not initialized yet). `main` = production.
+- Working branch: `001-usage-and-traffic-tables`. `main` = production.
+- Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
 - Project phase: documentation prepared from the SDD + EARS template; no code yet.
-- Last confirmed commit: none yet.
+- Last confirmed commit: `415d550` (initial documentation, 2026-10-29, on `main`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
-1. The owner initializes git, creates the private GitHub and GitLab repositories, and makes the first
-   commit of the documentation (the agent gives the exact commands).
+1. The owner configures the `ghp` and `glp` remotes and pushes `main` and the working branch.
 2. Task T1: the agent writes the token guide; the owner creates `monitor-cbt-analytics-readonly`
    and stores it in Bitwarden and `web/.dev.vars`.
 
@@ -21,3 +21,4 @@ _Last updated: 2026-10-29_
 - Legal: put the verbal delegated-administration agreements with SOMA and BORAEI in writing; confirm LOPDP roles and legitimate interest for IPs with an advisor; check the clients' privacy policies (`docs/LEGAL.md`).
 - Move to Node 24 LTS before April 2027.
 - Design: the CBT design system and the "CBT Monitoreo" prototype are a visual reference for spec 003; the landing animation conflicts with the design system's "no animation" rule.
+- Future spec "Seal of Guarantee": anchor daily hashes of statistics, audit and client reports on a blockchain (Rust or Solidity). Data stays private in D1; only hashes go on-chain. It proves the data was not altered after sealing, not that it is correct. Compare OpenTimestamps, EAS, Solana, Soroban and ICP. **Verify ICP first**: canisters in Rust, reverse gas model with cycles; check whether cycles must be bought (cost per month for this load) or can be obtained free, and current developer credits, in official sources.
