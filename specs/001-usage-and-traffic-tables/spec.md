@@ -11,7 +11,8 @@ history stored in D1 and a warning about the analytics token's expiration.
    offers for each zone.
 2. Base Worker (Hono + React), Access JWT and `ALLOWED_EMAILS` validation, published at `workers.dev` with Access and preview URLs disabled.
 3. `web/config/sites.json` (3 sites with a zone; COBTEC as an account only) and `web/config/limits.json` (Free limits with their check date).
-4. Usage per account: Workers requests; D1 rows read, rows written and storage; R2 Class A and
+4. Usage per account: Workers requests; D1 rows read, rows written, storage (account total and largest
+   database) and number of databases; R2 Class A and
    Class B operations and storage. For each: % used against the limit, threshold warning and
    projected days until the limit is reached.
 5. Traffic per site: requests, visits, page views, bytes, countries, top 20 IPs by traffic and top 20
@@ -54,7 +55,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R13. IF the token has no expiration date or expires more than 1 year from today, THEN the system SHALL display in red "El token no cumple la regla de caducidad (máximo 1 año)."
 
 ### Plan usage
-- R14. The system SHALL show, per account, a table with product, metric, usage, limit, % used, period (daily, monthly or total) and state.
+- R14. The system SHALL show, per account, a table with product, metric, usage, limit, % used, period (daily, monthly or total) and state, including the D1 rows "Base más grande" (against the per-database limit) and "Cantidad de bases" (against the databases per account). (P8)
 - R15. The system SHALL take limits and thresholds from `web/config/limits.json` and SHALL show below the table "Límites verificados el <fecha>".
 - R16. WHILE a metric is at or above 70 % of its limit, the system SHALL show its state in amber as "Cerca del límite"; at or above 90 %, in red as "Límite crítico"; at or above 100 %, in red as "Límite superado". (P2; default thresholds, configurable in `limits.json`)
 - R17. WHERE a metric is daily, the system SHALL show its peak of the last 7 days and the note "Se reinicia a las 19:00 ECT".
@@ -122,3 +123,6 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P7.** (From T7.) Real accounts report R2 operations the pricing page does not classify (e.g. `GetBucketNotificationConfiguration`, `GetBucketSippyConfiguration`). How are they counted?
   A (recommended): as Class A (lowest limit, so the warning is never late), listed under the table. B: as Class B (mostly reads). C: in no class, only listed.
   **Answer:** A (2026-10-29). Applied in R20.
+- **P8.** (From T8.) D1 Free also limits each database to 500 MB and each account to 10 databases; SOMA already has 6 databases and the monitor adds 2 to COBTEC. Should the table show them?
+  A (recommended): yes, rows "Base más grande" (500 MB, with its ID) and "Cantidad de bases" (10), with the same thresholds and projections. B: later.
+  **Answer:** A (2026-10-29). Applied in scope item 4 and R14. The owner also asked for a daily chart per metric with the limit line: recorded for spec 003 (charts).

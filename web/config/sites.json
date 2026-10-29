@@ -1,0 +1,31 @@
+{
+  "accounts": [
+    { "id": "cobtec", "name": "COBTEC", "accountId": "212a78d4cea6e1047658a98ba757cd2b" },
+    { "id": "soma", "name": "SOMA", "accountId": "b74a9056b9ae179a543449713d41020d" },
+    { "id": "boraei", "name": "BORAEI", "accountId": "31767db4f7f58a6651b7a284e211be81" }
+  ],
+  "sites": [
+    {
+      "id": "soma",
+      "name": "SOMA",
+      "accountId": "b74a9056b9ae179a543449713d41020d",
+      "zone": "somabwc.com",
+      "zoneTag": "e0fb73db5802715db5c839304a86c43e"
+    },
+    {
+      "id": "boraei",
+      "name": "BORAEI",
+      "accountId": "31767db4f7f58a6651b7a284e211be81",
+      "zone": "boraei.com",
+      "zoneTag": "a7f66e658dcc12ce1622705bd9661249"
+    },
+    {
+      "id": "mohamed-boraei",
+      "name": "MOHAMED-BORAEI",
+      "accountId": "31767db4f7f58a6651b7a284e211be81",
+      "zone": "mohamedboraei.com",
+      "zoneTag": "e0c79dafe8154cd45164ffa50501bf70",
+      "host": "www.mohamedboraei.com"
+    }
+  ]
+}

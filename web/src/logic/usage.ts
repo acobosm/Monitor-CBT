@@ -27,6 +27,9 @@ export const ACCOUNT_METRICS: readonly { product: Product; metric: string }[] = 
   { product: "d1", metric: "rows_read" },
   { product: "d1", metric: "rows_written" },
   { product: "d1", metric: "storage_bytes" },
+  /** Free limits each database to 500 MB, besides the 5 GB of the account (P8). */
+  { product: "d1", metric: "largest_db_bytes" },
+  { product: "d1", metric: "database_count" },
   { product: "r2", metric: "class_a_ops" },
   { product: "r2", metric: "class_b_ops" },
   { product: "r2", metric: "storage_bytes" },
@@ -57,6 +60,8 @@ export interface ParsedAccountUsage {
   days: Record<string, UsageMetric[]>;
   /** R2 operations not on the pricing page; counted as Class A (P7). */
   unclassifiedR2: string[];
+  /** ID of the largest D1 database of each day (the token cannot read database names). */
+  largestD1: Record<string, string | null>;
 }
 
 /** Turns one AccountUsage response into the full set of metrics for each requested day. */
@@ -77,7 +82,20 @@ export function parseAccountUsage(data: AccountUsageData, days: string[]): Parse
     add(row.dimensions.date, "d1:rows_written", row.sum.rowsWritten);
   }
   // Storage: the day's peak of each database or bucket, summed over the account.
-  for (const row of account?.d1Storage ?? []) add(row.dimensions.date, "d1:storage_bytes", row.max.databaseSizeBytes);
+  const databases = new Map<string, Map<string, number>>();
+  for (const row of account?.d1Storage ?? []) {
+    add(row.dimensions.date, "d1:storage_bytes", row.max.databaseSizeBytes);
+    const perDb = databases.get(row.dimensions.date) ?? new Map<string, number>();
+    perDb.set(row.dimensions.databaseId, Math.max(perDb.get(row.dimensions.databaseId) ?? 0, row.max.databaseSizeBytes ?? 0));
+    databases.set(row.dimensions.date, perDb);
+  }
+  const largestD1: Record<string, string | null> = {};
+  for (const day of days) {
+    const perDb = [...(databases.get(day) ?? [])].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    totals.get(day)?.set("d1:largest_db_bytes", perDb[0]?.[1] ?? 0);
+    totals.get(day)?.set("d1:database_count", perDb.length);
+    largestD1[day] = perDb[0]?.[0] ?? null;
+  }
   for (const row of account?.r2Storage ?? []) {
     add(row.dimensions.date, "r2:storage_bytes", (row.max.payloadSize ?? 0) + (row.max.metadataSize ?? 0));
   }
@@ -96,6 +114,7 @@ export function parseAccountUsage(data: AccountUsageData, days: string[]): Parse
       ]),
     ),
     unclassifiedR2: [...unclassified].sort(),
+    largestD1,
   };
 }
 
@@ -134,6 +153,8 @@ const METRIC_LABELS: Record<string, string> = {
   "d1:rows_read": "Filas leídas",
   "d1:rows_written": "Filas escritas",
   "d1:storage_bytes": "Almacenamiento",
+  "d1:largest_db_bytes": "Base más grande",
+  "d1:database_count": "Cantidad de bases",
   "r2:class_a_ops": "Operaciones Clase A",
   "r2:class_b_ops": "Operaciones Clase B",
   "r2:storage_bytes": "Almacenamiento",
@@ -174,8 +195,9 @@ export function evaluateUsage(
   history: Record<string, UsageMetric[]>,
   limits: LimitsConfig,
   now: Date,
-  unclassifiedR2: string[] = [],
+  extras: { unclassifiedR2?: string[]; largestD1Id?: string | null } = {},
 ): UsageTable {
+  const unclassifiedR2 = extras.unclassifiedR2 ?? [];
   const today = utcDay(now);
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
   const monthEnd = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
@@ -184,15 +206,16 @@ export function evaluateUsage(
 
   const rows = ACCOUNT_METRICS.map(({ product, metric }): UsageRow => {
     const config = limits.metrics.find((m) => m.product === product && m.metric === metric);
-    const period: Period = config?.period ?? (metric === "storage_bytes" ? "total" : "daily");
+    const period: Period = config?.period ?? (metric.endsWith("_bytes") ? "total" : "daily");
     const limit = config?.limit ?? null;
-    const storage = metric === "storage_bytes";
+    // Storage and totals (database count) use the latest value, not a sum over a period.
+    const latest = period === "total" || metric.endsWith("_bytes");
     let usage: number;
     let peak7: number | null = null;
     let note: string | null = null;
     let projection: string | null = null;
 
-    if (storage) {
+    if (latest) {
       // Latest known value; projection from the average growth of the last 7 days (R18).
       const latestDay = Object.keys(history).filter((d) => d <= today && valueOn(history, d, product, metric) !== null).sort().at(-1);
       usage = latestDay ? (valueOn(history, latestDay, product, metric) ?? 0) : 0;
@@ -201,6 +224,7 @@ export function evaluateUsage(
       if (limit !== null && usage < limit) {
         projection = growth > 0 && (limit - usage) / growth <= remainingDays ? projectionText((limit - usage) / growth) : TEXT_NO_RISK;
       }
+      if (metric === "largest_db_bytes" && extras.largestD1Id) note = `Base: ${extras.largestD1Id}`;
     } else if (period === "monthly") {
       usage = 0;
       for (let day = utcDay(new Date(monthStart)); day <= today; day = shiftDay(day, 1)) {

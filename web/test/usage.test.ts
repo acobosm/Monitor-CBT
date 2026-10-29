@@ -193,7 +193,51 @@ describe("R19 missing limit", () => {
 
 describe("P7 unclassified note", () => {
   it("lists the unclassified R2 operations under the table", () => {
-    const table = evaluateUsage({}, limits, new Date("2026-10-29T17:00:00Z"), ["GetBucketSippyConfiguration"]);
+    const table = evaluateUsage({}, limits, new Date("2026-10-29T17:00:00Z"), { unclassifiedR2: ["GetBucketSippyConfiguration"] });
     expect(table.unclassifiedText).toBe("Operaciones de R2 sin clasificar (contadas como Clase A): GetBucketSippyConfiguration");
+  });
+});
+
+describe("P8 D1 per-database limits", () => {
+  it("parses the largest database and the number of databases per day", () => {
+    const parsed = parseAccountUsage(data, ["2026-10-27", "2026-10-28"]);
+    expect(metric(parsed.days, "2026-10-28", "d1", "largest_db_bytes")).toBe(1_000_000);
+    expect(metric(parsed.days, "2026-10-28", "d1", "database_count")).toBe(2);
+    expect(parsed.largestD1["2026-10-28"]).toBe("db-1");
+    expect(metric(parsed.days, "2026-10-27", "d1", "database_count")).toBe(0);
+    expect(parsed.largestD1["2026-10-27"]).toBeNull();
+  });
+
+  it("evaluates the largest database against 500 MB, with its ID and a projection", () => {
+    const now = new Date("2026-10-20T12:00:00Z");
+    const table = evaluateUsage(
+      history({
+        "2026-10-13": { "d1:largest_db_bytes": 380_000_000, "d1:database_count": 6 },
+        "2026-10-20": { "d1:largest_db_bytes": 450_000_000, "d1:database_count": 6 },
+      }),
+      limits,
+      now,
+      { largestD1Id: "db-1" },
+    );
+    // 10 MB per day; 50 MB left = 5 days.
+    expect(row(table.rows, "d1", "largest_db_bytes")).toMatchObject({
+      label: "Base más grande",
+      usage: 450_000_000,
+      limit: 500_000_000,
+      percent: 90,
+      state: "critical",
+      note: "Base: db-1",
+      projection: "Al ritmo actual llegas al límite en 5 días",
+      peak7: null,
+    });
+    expect(row(table.rows, "d1", "database_count")).toMatchObject({
+      label: "Cantidad de bases",
+      usage: 6,
+      limit: 10,
+      percent: 60,
+      state: "ok",
+      period: "total",
+      projection: TEXT_NO_RISK,
+    });
   });
 });

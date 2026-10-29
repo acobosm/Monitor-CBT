@@ -14,15 +14,22 @@
 <!-- Fields confirmed by the T3 discovery (2026-10-29, `web/scripts/discover.mjs`); sources in "GraphQL sources" below. -->
 All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 
-### Site (config file `web/config/sites.json`, not a table)
+### Accounts and sites (config file `web/config/sites.json`, not tables)
+`accounts` lists the 3 accounts whose plan usage is read (COBTEC included: its usage covers the monitor's own
+Worker and D1 databases). `sites` lists the 3 sites whose zone is in Cloudflare; `cobtec.net` is not a site
+because its DNS is at GoDaddy.
+
 | Field | Type | Required | Sensitive | Description |
 |---|---|---|---|---|
-| id | text | yes | no | Stable id: `cobtec`, `soma`, `boraei`, `mohamed-boraei`. |
-| name | text | yes | no | Display name (COBTEC, SOMA, BORAEI, MOHAMED-BORAEI). |
-| accountId | text | yes | no | Cloudflare account ID. |
-| zone | text | no | no | Zone name (e.g. `somabwc.com`). Absent for COBTEC: `cobtec.net` DNS is at GoDaddy, so only its account usage is read. |
-| zoneTag | text | no | no | Zone ID, required by GraphQL (e.g. `e0fb73db5802715db5c839304a86c43e`). Present whenever `zone` is. |
-| host | text | no | no | Optional hostname filter for traffic (e.g. `www.mohamedboraei.com`). |
+| accounts[].id | text | yes | no | `cobtec`, `soma`, `boraei`. |
+| accounts[].name | text | yes | no | Display name. |
+| accounts[].accountId | text | yes | no | Cloudflare account ID. |
+| sites[].id | text | yes | no | `soma`, `boraei`, `mohamed-boraei` (used as `site_id` in the tables). |
+| sites[].name | text | yes | no | Display name (SOMA, BORAEI, MOHAMED-BORAEI). |
+| sites[].accountId | text | yes | no | Account that owns the zone. |
+| sites[].zone | text | yes | no | Zone name (e.g. `somabwc.com`). |
+| sites[].zoneTag | text | yes | no | Zone ID, required by GraphQL. |
+| sites[].host | text | no | no | Hostname filter for traffic: only `www.mohamedboraei.com` (its apex only redirects; on 2026-10-28 the zone had 5,364 visitor requests, 1,561 of them to www). |
 
 ### usage_daily (`monitor-cbt-statistics-db`)
 | Field | Type | Required | Sensitive | Description |
@@ -30,7 +37,7 @@ All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 | day | text | yes | no | UTC day. |
 | account_id | text | yes | no | Cloudflare account ID. |
 | product | text | yes | no | `workers`, `d1` or `r2`. |
-| metric | text | yes | no | `requests` (workers); `rows_read`, `rows_written`, `storage_bytes` (d1); `class_a_ops`, `class_b_ops`, `storage_bytes` (r2). Summed over all scripts, databases or buckets of the account. |
+| metric | text | yes | no | `requests` (workers); `rows_read`, `rows_written`, `storage_bytes`, `largest_db_bytes`, `database_count` (d1); `class_a_ops`, `class_b_ops`, `storage_bytes` (r2). Summed over all scripts, databases or buckets of the account, except `largest_db_bytes` (size of the largest database that day) and `database_count` (databases reported that day). |
 | value | integer | yes | no | Value for that day. |
 | fetched_at | text | yes | no | When it was read from the API (ISO UTC). |
 
@@ -106,7 +113,7 @@ Key: (scope, tag, dataset). Refreshed on every daily run.
 | Visitor IPs (`ip_daily.ip`) | **Yes, personal data** | 13 months | Deleted by the daily task |
 | Email in the audit log (`audit_event.email`) | **Yes, personal data** | No automatic deletion for now | Reviewed as usage grows |
 
-Size estimate (after T3, 3 sites): about 300 rows per day (usage ~21, traffic 3, countries ~150,
+Size estimate (after T3, 3 sites): about 300 rows per day (usage 27, traffic 3, countries ~150,
 IPs up to 120), roughly 30 KB per day or 11 MB per year; to be checked with real data after T12. D1 Free plan limit: 500 MB per
 database (checked on 2026-10-28 at developers.cloudflare.com/d1/platform/limits).
 
@@ -134,7 +141,7 @@ enabled on the Free plan for the 3 accounts and 3 zones.
 | R2 storage | `r2StorageAdaptiveGroups` | `max.payloadSize`, `max.metadataSize`, `max.objectCount` by `bucketName` | 90 days | 32 days |
 | Requests, visits, bytes, countries | `httpRequestsAdaptiveGroups` | `count`, `sum.visits`, `sum.edgeResponseBytes`, `clientCountryName`; filters `requestSource`, `clientRequestHTTPHost` | 31 days | 30 days |
 | Top IPs by traffic | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `clientCountryName`; then `datetimeHour` for the top 20 | 31 days | 30 days |
-| Top IPs by security | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `securityAction`, filtered to block/challenge actions | 31 days | 30 days |
+| Top IPs by security | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `securityAction` (`securityAction_neq: "unknown"`); `block` → "Bloqueada", any `*challenge*` → "Desafiada", others (log, skip…) ignored | 31 days | 30 days |
 | Page views | `httpRequests1dGroups` | `sum.pageViews` | 365 days | 365 days |
 
 - `firewallEventsAdaptiveGroups` is **disabled** on Free; `firewallEventsAdaptive` (raw events) is enabled

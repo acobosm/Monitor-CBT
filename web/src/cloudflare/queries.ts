@@ -42,3 +42,78 @@ export interface AccountUsageData {
     }[];
   };
 }
+
+/** Base filter of every traffic query: real visitors only, and the site's hostname when it has one. */
+function trafficFilter(withHost: boolean, extra = ""): string {
+  return `{ datetime_geq: $start, datetime_lt: $end, requestSource: "eyeball"${withHost ? ", clientRequestHTTPHost: $host" : ""}${extra} }`;
+}
+
+/**
+ * Traffic of one site for one UTC day: totals, page views (whole zone), countries, top IPs by traffic
+ * and security groups by IP and action. `withHost` adds the hostname filter (MOHAMED-BORAEI).
+ */
+export function siteDayQuery(withHost: boolean): string {
+  const filter = trafficFilter(withHost);
+  return `query SiteDay($tag: string!, $day: Date!, $start: Time!, $end: Time!${withHost ? ", $host: string!" : ""}) {
+  viewer {
+    zones(filter: { zoneTag: $tag }) {
+      totals: httpRequestsAdaptiveGroups(limit: 1, filter: ${filter}) {
+        count
+        sum { visits edgeResponseBytes }
+      }
+      pages: httpRequests1dGroups(limit: 1, filter: { date: $day }) {
+        sum { pageViews }
+      }
+      countries: httpRequestsAdaptiveGroups(limit: 300, filter: ${filter}, orderBy: [count_DESC]) {
+        count
+        dimensions { clientCountryName }
+      }
+      topIps: httpRequestsAdaptiveGroups(limit: 20, filter: ${filter}, orderBy: [count_DESC]) {
+        count
+        dimensions { clientIP clientCountryName }
+      }
+      security: httpRequestsAdaptiveGroups(limit: 200, filter: ${trafficFilter(withHost, ', securityAction_neq: "unknown"')}, orderBy: [count_DESC]) {
+        count
+        dimensions { clientIP clientCountryName securityAction }
+      }
+    }
+  }
+}`;
+}
+
+/** Hours in which the top IPs were seen that day, to show the last one (P5). */
+export function siteDayHoursQuery(withHost: boolean): string {
+  return `query SiteDayHours($tag: string!, $start: Time!, $end: Time!, $trafficIps: [string!]!, $securityIps: [string!]!${withHost ? ", $host: string!" : ""}) {
+  viewer {
+    zones(filter: { zoneTag: $tag }) {
+      trafficHours: httpRequestsAdaptiveGroups(limit: 1000, filter: ${trafficFilter(withHost, ", clientIP_in: $trafficIps")}) {
+        dimensions { clientIP datetimeHour }
+      }
+      securityHours: httpRequestsAdaptiveGroups(limit: 1000, filter: ${trafficFilter(withHost, ', securityAction_neq: "unknown", clientIP_in: $securityIps')}) {
+        dimensions { clientIP datetimeHour }
+      }
+    }
+  }
+}`;
+}
+
+export interface SiteDayData {
+  viewer: {
+    zones: {
+      totals: { count: number; sum: { visits: number; edgeResponseBytes: number } }[];
+      pages: { sum: { pageViews: number } }[];
+      countries: { count: number; dimensions: { clientCountryName: string } }[];
+      topIps: { count: number; dimensions: { clientIP: string; clientCountryName: string } }[];
+      security: { count: number; dimensions: { clientIP: string; clientCountryName: string; securityAction: string } }[];
+    }[];
+  };
+}
+
+export interface SiteDayHoursData {
+  viewer: {
+    zones: {
+      trafficHours: { dimensions: { clientIP: string; datetimeHour: string } }[];
+      securityHours: { dimensions: { clientIP: string; datetimeHour: string } }[];
+    }[];
+  };
+}

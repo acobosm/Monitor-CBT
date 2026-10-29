@@ -112,6 +112,9 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
   listed count as Class A and are named under the table (P7). Recheck the page when one appears.
 - **Usage state vs. display:** the state uses the exact percentage; the shown percentage is truncated to one decimal
   (69.999 % shows 69.9 % and "Normal").
+- **D1 per database:** the table shows the largest database against 500 MB and the number of databases against 10
+  (P8). The analytics token cannot read database names (no D1 permission, on purpose), so the largest one is shown
+  by its ID; match it in the Cloudflare dashboard.
 - **R2 storage** is compared as the latest daily peak against 10 GB (conservative: the bill uses the monthly average
   of daily peaks).
 - **Discovery script:** `node scripts/discover.mjs <file.json>` (from `web/`) reads the `settings` node and one

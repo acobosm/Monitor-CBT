@@ -11,6 +11,8 @@
     { "product": "d1", "metric": "rows_read", "period": "daily", "limit": 5000000 },
     { "product": "d1", "metric": "rows_written", "period": "daily", "limit": 100000 },
     { "product": "d1", "metric": "storage_bytes", "period": "total", "limit": 5000000000 },
+    { "product": "d1", "metric": "largest_db_bytes", "period": "total", "limit": 500000000 },
+    { "product": "d1", "metric": "database_count", "period": "total", "limit": 10 },
     { "product": "r2", "metric": "class_a_ops", "period": "monthly", "limit": 1000000 },
     { "product": "r2", "metric": "class_b_ops", "period": "monthly", "limit": 10000000 },
     { "product": "r2", "metric": "storage_bytes", "period": "monthly", "limit": 10000000000 }

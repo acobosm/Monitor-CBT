@@ -1,0 +1,27 @@
+{
+  "viewer": {
+    "zones": [
+      {
+        "totals": [{ "count": 1561, "sum": { "visits": 105, "edgeResponseBytes": 6012356 } }],
+        "pages": [{ "sum": { "pageViews": 127 } }],
+        "countries": [
+          { "count": 1170, "dimensions": { "clientCountryName": "US" } },
+          { "count": 300, "dimensions": { "clientCountryName": "EC" } },
+          { "count": 90, "dimensions": { "clientCountryName": "SG" } },
+          { "count": 1, "dimensions": { "clientCountryName": "" } }
+        ],
+        "topIps": [
+          { "count": 400, "dimensions": { "clientIP": "192.0.2.10", "clientCountryName": "US" } },
+          { "count": 250, "dimensions": { "clientIP": "192.0.2.20", "clientCountryName": "EC" } },
+          { "count": 250, "dimensions": { "clientIP": "192.0.2.11", "clientCountryName": "US" } }
+        ],
+        "security": [
+          { "count": 9, "dimensions": { "clientIP": "198.51.100.1", "clientCountryName": "HK", "securityAction": "block" } },
+          { "count": 4, "dimensions": { "clientIP": "198.51.100.2", "clientCountryName": "US", "securityAction": "managedChallenge" } },
+          { "count": 3, "dimensions": { "clientIP": "198.51.100.2", "clientCountryName": "US", "securityAction": "block" } },
+          { "count": 50, "dimensions": { "clientIP": "198.51.100.3", "clientCountryName": "DE", "securityAction": "log" } }
+        ]
+      }
+    ]
+  }
+}
