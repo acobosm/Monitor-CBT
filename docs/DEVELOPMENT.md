@@ -46,13 +46,14 @@ Local and production only (no staging).
 | | Production |
 |---|---|
 | App / Worker / Service | Worker `monitor-cbt` (COBTEC account) |
-| Domain | `monitor.cobtec.net` (Worker Custom Domain; `workers.dev` and preview URLs disabled) |
+| Domain | `monitor-cbt.<subdomain>.workers.dev` protected by Access; `monitor.cobtec.net` is a GoDaddy 301 redirect (unmasked) to it; preview URLs disabled |
 | Databases | `monitor-cbt-statistics-db`, `monitor-cbt-audit-db` |
 | Deploy command | From `web/`: remote migrations of each database first, then `npm run deploy`. Always with user authorization. |
 
 - Order: migrations before code, so new code never meets a database without its tables.
-- Prerequisite: `cobtec.net` must already be in Cloudflare (nameservers moved from GoDaddy, MX record
-  copied as DNS only) before `monitor.cobtec.net` can be used.
+- `cobtec.net` DNS stays at GoDaddy (the family's Outlook.com addresses depend on it). Never use masked
+  forwarding: it breaks the Access sign-in. A Custom Domain can be added later without code changes if the
+  zone moves to Cloudflare or another domain is used.
 
 ## What can be changed without code
 There is no admin panel.

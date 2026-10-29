@@ -10,11 +10,11 @@ token that never reaches the browser. A daily scheduled task stores snapshots in
 API retains. Access is restricted by email one-time PIN (Cloudflare Access). For now only the owner
 uses it; clients receive Excel reports on request.
 - Code lives in `web/`; all `npm` and `npx wrangler` commands run from `web/`. Documentation (`docs/`, `specs/`) lives at the repository root.
-- Production: https://monitor.cobtec.net (not created yet). No staging environment: local and production only.
+- Production: the Worker's `workers.dev` URL protected by Access; https://monitor.cobtec.net is a GoDaddy redirect to it (not created yet). `cobtec.net` DNS stays at GoDaddy (family Outlook.com email). No staging environment: local and production only.
 
 | Site | Account | Account ID | Zone |
 |---|---|---|---|
-| COBTEC (CBT) | own | 212a78d4cea6e1047658a98ba757cd2b | cobtec.net |
+| COBTEC (CBT) | own | 212a78d4cea6e1047658a98ba757cd2b | cobtec.net (DNS at GoDaddy: account usage only, no zone traffic) |
 | SOMA | delegated | b74a9056b9ae179a543449713d41020d | somabwc.com |
 | BORAEI | delegated | 31767db4f7f58a6651b7a284e211be81 | boraei.com |
 | MOHAMED-BORAEI | delegated | 31767db4f7f58a6651b7a284e211be81 | mohamedboraei.com (served at www; mohamed-boraei.com only redirects to it, verified 2026-10-29) |
@@ -24,7 +24,7 @@ uses it; clients receive Excel reports on request.
 - API and scheduled task: Hono on the Worker (`fetch` + `scheduled` handlers).
 - UI: React built with Vite, served as Workers Static Assets from the same Worker. Final visual design will come from the CBT design system.
 - Storage: Cloudflare D1, two databases: `monitor-cbt-statistics-db` (daily snapshots) and `monitor-cbt-audit-db` (audit log).
-- Access: Cloudflare Access (Zero Trust) with email one-time PIN in front of monitor.cobtec.net.
+- Access: Cloudflare Access (Zero Trust) with email one-time PIN in front of the Worker's `workers.dev` URL.
 - Tests: Vitest with `@cloudflare/vitest-pool-workers`.
 - Node.js 22 LTS (>= 22.23.4, security release of 2026-10-21).
 

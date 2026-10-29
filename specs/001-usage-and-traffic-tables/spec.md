@@ -2,15 +2,15 @@
 Status: approved (2026-10-29) · Branch: `001-usage-and-traffic-tables`
 
 ## Objective
-Let the owner see, in plain tables at `monitor.cobtec.net`, the Free plan usage of the 3 Cloudflare
-accounts and the traffic of the 4 sites (visits, countries, top IPs and suspicious IPs), with a daily
+Let the owner see, in plain tables at the Worker's `workers.dev` URL (reached through `monitor.cobtec.net`), the Free plan usage of the 3 Cloudflare
+accounts and the traffic of the 3 sites whose zones are in Cloudflare (visits, countries, top IPs and suspicious IPs), with a daily
 history stored in D1 and a warning about the analytics token's expiration.
 
 ## Scope
 1. Guide to create the analytics token, and a discovery query that confirms which data the API
    offers for each zone.
-2. Base Worker (Hono + React), Access JWT and `ALLOWED_EMAILS` validation, `workers.dev` disabled.
-3. `web/config/sites.json` (4 sites) and `web/config/limits.json` (Free limits with their check date).
+2. Base Worker (Hono + React), Access JWT and `ALLOWED_EMAILS` validation, published at `workers.dev` with Access and preview URLs disabled.
+3. `web/config/sites.json` (3 sites with a zone; COBTEC as an account only) and `web/config/limits.json` (Free limits with their check date).
 4. Usage per account: Workers requests; D1 rows read, rows written and storage; R2 Class A and
    Class B operations and storage. For each: % used against the limit, threshold warning and
    projected days until the limit is reached.
@@ -26,6 +26,8 @@ history stored in D1 and a warning about the analytics token's expiration.
 - Excel and PDF export (spec 002).
 - Charts and the CBT visual design (cards, themes) (spec 003).
 - Client role, email alerts, automated backups to R2.
+- Traffic of `cobtec.net`: its DNS stays at GoDaddy (family Outlook.com email); only the COBTEC account usage is shown.
+- A Custom Domain for the Worker.
 - The redirecting zone `mohamed-boraei.com` (it only redirects to `www.mohamedboraei.com`).
 - Latency, DNS and certificate checks shown in the prototype.
 
@@ -81,7 +83,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 
 ### UI and discovery
 - R36. The system SHALL show on the home page a module selector with a single option, "Cloudflare - Consumo y Tráfico", which leads to the dashboard.
-- R37. The system SHALL show in the dashboard a menu with "Consumo de planes" and one entry per site: COBTEC, SOMA, BORAEI, MOHAMED-BORAEI.
+- R37. The system SHALL show in the dashboard a menu with "Consumo de planes" and one entry per site with a zone: SOMA, BORAEI, MOHAMED-BORAEI.
 - R38. The system SHALL show on every page the footer "Powered by CBT · © 2026".
 - R39. The system SHALL show numbers in `es-EC` format and times in ECT.
 - R40. The system SHALL offer a "Salir" button that ends the Access session.
@@ -94,7 +96,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - Documentation affected by this spec updated.
 - The token creation guide is written, and the owner created the new token `monitor-cbt-analytics-readonly` with it.
 - The discovery results are recorded: what the Free plan offers for each zone and account, IPs included.
-- First production deploy done, with Access configured and `workers.dev` disabled; the owner tested the real sign-in.
+- First production deploy done, with Access on the `workers.dev` URL, preview URLs disabled and the `monitor.cobtec.net` redirect; the owner tested the real sign-in.
 - The "Current usage" column of `docs/SERVICES_AND_COSTS.md` has real figures.
 
 ## Clarifications

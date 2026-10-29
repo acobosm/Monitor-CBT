@@ -1,8 +1,8 @@
 # Architecture — monitor-cbt
 
 ## Overview
-monitor-cbt is **a single Cloudflare Worker** (`monitor-cbt`) in the COBTEC account, published at
-`monitor.cobtec.net`. It does three things:
+monitor-cbt is **a single Cloudflare Worker** (`monitor-cbt`) in the COBTEC account, published at its
+`monitor-cbt.<subdomain>.workers.dev` URL; `monitor.cobtec.net` is a GoDaddy redirect (301, unmasked) to it. It does three things:
 1. **Serves the UI** (React): a home page with a module selector (today only "Cloudflare - Consumo y Tráfico")
    that leads to each monitoring dashboard. Further API-based monitoring modules can be added later.
 2. **Exposes its own API** (`/api/*`), which only answers authenticated users.
@@ -10,12 +10,12 @@ monitor-cbt is **a single Cloudflare Worker** (`monitor-cbt`) in the COBTEC acco
    day's statistics into the D1 database `monitor-cbt-statistics-db`. Data views and exports are
    recorded in a separate D1 database, `monitor-cbt-audit-db`.
 
-**Cloudflare Access** (email one-time PIN) protects the whole hostname `monitor.cobtec.net`, from
+**Cloudflare Access** (email one-time PIN) protects the whole hostname `monitor-cbt.<subdomain>.workers.dev`, from
 the root: without a valid code nothing is served (no page, no UI files, no API). The Worker validates
-the Access JWT again on every API request and checks its own email allowlist. `workers.dev` and
-preview URLs are disabled so there is no entry point without Access.
+the Access JWT again on every API request and checks its own email allowlist. Preview URLs are disabled and
+there is no other route or domain, so there is no entry point without Access.
 
-To read data, the Worker calls the Cloudflare **GraphQL Analytics API** (3 accounts, 4 zones) and
+To read data, the Worker calls the Cloudflare **GraphQL Analytics API** (3 accounts, 3 zones; `cobtec.net` is added when its DNS moves to Cloudflare) and
 `tokens/verify` (token expiration) with the read-only token stored as a Worker secret. The UI never
 talks to Cloudflare directly, only to the Worker's API. When the dashboard opens, the Worker combines
 the D1 history with recent data from the API.
@@ -23,7 +23,7 @@ the D1 history with recent data from the API.
 ## Diagram
 ```mermaid
 flowchart LR
-  user[Owner browser] -->|monitor.cobtec.net/*| access[Cloudflare Access<br/>email one-time PIN]
+  user[Owner browser] -->|monitor.cobtec.net → 301 → workers.dev URL| access[Cloudflare Access<br/>email one-time PIN]
   access -->|Access JWT| worker
 
   subgraph cobtec[COBTEC Cloudflare account]
@@ -43,7 +43,7 @@ flowchart LR
 ```
 
 ## Main flows
-1. **Sign in:** open `monitor.cobtec.net` → Access asks for email and one-time code → home page with
+1. **Sign in:** open `monitor.cobtec.net` → GoDaddy redirects to the workers.dev URL → Access asks for email and one-time code → home page with
    the module selector → choose the module → dashboard. On every API call the Worker validates the
    JWT and the email allowlist, and records the view in the audit log.
 2. **View the dashboard:** the UI requests data from `/api` → the Worker reads the history from D1,
@@ -84,6 +84,7 @@ with the app, so the browser never calls Google Fonts.
 | 2026-10-28 | Cloudflare Access email one-time PIN over the whole hostname, no public page | Without a code nothing is visible; one rule, less risk |
 | 2026-10-28 | Double barrier: Access JWT + email allowlist in the Worker | A mistake in the Access policy does not open the dashboard |
 | 2026-10-28 | Access session of 24 hours | Occasional use; sensitive data on screen |
+| 2026-10-29 | Published at the `workers.dev` URL with Access (one-click), `monitor.cobtec.net` redirects there from GoDaddy; `cobtec.net` DNS stays at GoDaddy | The family's Outlook.com personalized addresses (@cobtec.net) depend on GoDaddy DNS and cannot be re-added if lost (feature retired 2023-11-30). Custom Domains need the zone in Cloudflare. Own tool, so the URL change is acceptable |
 | 2026-10-28 | Daily history in D1 | The API retains only a few days |
 | 2026-10-28 | A statistics "day" = Cloudflare's UTC day (19:00 to 19:00 ECT) | Matches the daily limit reset |
 | 2026-10-28 | Stored IPs: top N per day, deleted after 13 months | Security visibility with bounded personal data |

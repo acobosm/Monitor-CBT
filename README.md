@@ -1,5 +1,5 @@
 # monitor-cbt
-Private dashboard at monitor.cobtec.net that shows Cloudflare usage (Workers, D1, R2 and zone
+Private dashboard (reached through monitor.cobtec.net) that shows Cloudflare usage (Workers, D1, R2 and zone
 traffic) for the websites COBTEC manages, using a read-only Cloudflare Analytics token.
 
 ## Requirements

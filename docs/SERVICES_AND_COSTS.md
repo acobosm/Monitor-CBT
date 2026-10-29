@@ -7,9 +7,9 @@ Inventory of every account and service the project depends on. Limits must be ch
 | Cloudflare: COBTEC account (212a78d4cea6e1047658a98ba757cd2b) | COBTEC (owner) | Owner | Worker, D1 databases, Access, zone `cobtec.net`. |
 | Cloudflare: SOMA account (b74a9056b9ae179a543449713d41020d) | Client SOMA | Owner, by delegated administration | This app only reads analytics. |
 | Cloudflare: BORAEI account (31767db4f7f58a6651b7a284e211be81) | Client BORAEI (the Boraei brothers) | Owner, by delegated administration | This app only reads analytics. |
-| GoDaddy | COBTEC (owner) | Owner | Registrar of `cobtec.net`. DNS moves to Cloudflare; email stays where it is. |
-| Outlook.com (Microsoft) | Owner's personal account | Owner | Email for `cobtec.net` (MX record). When moving DNS to Cloudflare, copy the MX record and any email-related TXT/CNAME records exactly as in GoDaddy, as DNS only. |
-| GitHub and GitLab | Owner | Owner | Private repositories, not created yet. |
+| GoDaddy | COBTEC (owner) | Owner | Registrar and DNS of `cobtec.net` (expires 2027-01-28). DNS stays at GoDaddy. Hosts the 301 redirect `monitor.cobtec.net` → workers.dev URL. |
+| Outlook.com (Microsoft) | Owner's personal account (Microsoft 365 Family) | Owner and family | Personalized addresses @cobtec.net for the family (MX `…pamx1.hotmail.com`, SPF, `autodiscover`, `_outlook`, `_domainconnect` at GoDaddy). The feature was retired for new setups on 2023-11-30 and an address cannot be re-added once removed; it is tied to GoDaddy DNS. Do not move or edit those records. |
+| GitHub and GitLab | Owner | Owner | Private repositories: `ghp` = github.com/acobosm/Monitor-CBT, `glp` = gitlab.com/acobosm1/cbt-development/monitor-cbt. Pushed with personal tokens (with expiration) kept in memory 8 h by the git credential cache. |
 | Bitwarden | Owner | Owner | Stores the analytics token. |
 
 ## Plans, limits and current usage
@@ -19,7 +19,7 @@ Inventory of every account and service the project depends on. Limits must be ch
 | D1 | Free | 5 M rows read/day; 100,000 rows written/day (reset 00:00 UTC); 5 GB total; 500 MB per database; 10 databases; Time Travel 7 days (2026-10-28) | Pending (spec 001) | $0 |
 | R2 | Free | 10 GB-month; 1 M Class A ops/month; 10 M Class B ops/month. Not used by this app; measured in the monitored accounts (2026-10-28) | Not used | $0 |
 | GraphQL Analytics API | Included | 300 queries per 5 minutes; adaptive datasets keep at least 31 days on every plan; up to 10 zones per query (2026-10-28) | Pending (spec 001) | $0 |
-| Zero Trust (Access) | Free | 50 users; sign-in logs kept up to 24 hours. One-time PIN availability on Free not stated in the docs: verify in the dashboard (2026-10-28) | 1 user | $0 |
+| Zero Trust (Access) | Free | 50 users; sign-in logs kept up to 24 hours. One-time PIN and one-click Access on `workers.dev` availability on Free not stated in the docs: verify in the dashboard (2026-10-28) | 1 user | $0 |
 
 Sources: developers.cloudflare.com (workers/platform/limits, d1/platform/pricing, d1/platform/limits,
 r2/pricing, analytics/graphql-api/limits) and cloudflare.com/plans/sase-zero-trust.
@@ -38,8 +38,60 @@ needed); one-time PIN availability on Access Free.
 Not secrets (kept in `wrangler.jsonc`): the Access team domain and the Access application "AUD" tag,
 which the Worker needs to validate the JWT.
 
-Planned analytics token (step-by-step creation guide to be written in spec 001, after confirming the
-permissions cover every metric, IPs included):
-- Name: `monitor-cbt-analytics-readonly` (user API token).
-- Permissions: `Account | Account Analytics | Read` on the 3 accounts; `Zone | Analytics | Read` on the 4 zones.
-- No IP filtering; expiration 6 months.
+## Analytics token guide
+Token `monitor-cbt-analytics-readonly`: a user API token, read-only, for the GraphQL Analytics API and
+`tokens/verify`. Its value is never written in the repository, in chats with assistants, in commits or
+in screenshots.
+
+### 1. Create
+1. dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token → Get started.
+2. Name: `monitor-cbt-analytics-readonly`.
+3. Permissions (only these two):
+   - `Account | Account Analytics | Read`
+   - `Zone | Analytics | Read`
+4. Account Resources: Include → each of the 3 accounts one by one (COBTEC, SOMA, BORAEI). Never "All accounts".
+5. Zone Resources: Include → Specific zone → each of the 3 zones in Cloudflare (`somabwc.com`,
+   `boraei.com`, `mohamedboraei.com`). `cobtec.net` is added by editing the token only if its DNS ever
+   moves to Cloudflare.
+6. Client IP Address Filtering: empty (the Worker leaves from changing Cloudflare IPs).
+7. TTL: start today, end on the owner's common token expiration date (all the owner's API tokens expire
+   on the same day; first token: 2026-10-29 to 2026-12-31 23:59 ECT = 2027-01-01T04:59:59Z). About 6
+   months recommended, never more than 1 year.
+8. Continue to summary: check that only the 2 Read permissions, 3 accounts and 3 zones appear, and
+   no "Edit" permission. Then Create Token and copy the value (it is shown only once).
+
+### 2. Delegated accounts
+SOMA and BORAEI appear in Account Resources only if the owner's user is a member of those accounts with
+a role that can read Analytics. If one is missing, ask the client to adjust the owner's role in their
+account. Never use a different or broader token to work around it.
+
+### 3. Store
+- Bitwarden item `monitor-cbt-analytics-readonly`: the value, expiration date, permissions, accounts and zones.
+- `web/.dev.vars` (listed in `.gitignore`): `CLOUDFLARE_ANALYTICS_TOKEN=<value>`.
+- Worker secret (in T12, with authorization): `npx wrangler secret put CLOUDFLARE_ANALYTICS_TOKEN`
+  from `web/`; it asks for the value without echoing it.
+
+### 4. Verify without exposing it
+Run from `web/`; it prints only the status and the expiration date (share only that output):
+
+```bash
+TOKEN=$(grep '^CLOUDFLARE_ANALYTICS_TOKEN=' .dev.vars | cut -d= -f2-)
+curl -s -H "Authorization: Bearer $TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify \
+  | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["success"], (r.get("result") or {}).get("status"), (r.get("result") or {}).get("expires_on"), [e.get("message") for e in r.get("errors", [])])'
+unset TOKEN
+```
+
+Expected: `True active <expiration date> []`.
+
+### 5. Renew (about 30 days before expiration, or when the dashboard shows "Por vencer")
+1. Create a new token with the same settings, named `monitor-cbt-analytics-readonly-YYYY-MM`.
+2. Update Bitwarden, `web/.dev.vars` and the Worker secret.
+3. Verify it (step 4) and check that the dashboard loads data.
+4. Only then revoke the old token (API Tokens → ⋯ → Delete).
+5. Update the expiration date in `MEMORY.md`.
+
+### 6. Revoke immediately if it leaks
+1. Delete it in API Tokens.
+2. Create a new one (step 1) and store it (step 3).
+3. Review the audit log of each of the 3 accounts (Manage Account → Audit Log) for unexpected activity.
+4. Record what happened, when, and what was done in `docs/TECH_DEBT.md` or the active spec.

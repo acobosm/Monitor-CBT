@@ -6,18 +6,17 @@ _Last updated: 2026-10-29_
 ## Where we are
 - Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: documentation prepared from the SDD + EARS template; no code yet.
-- Last confirmed commit: `415d550` (initial documentation, 2026-10-29, on `main`).
+- Project phase: spec 001 in progress; T1 (analytics token) done, no code yet.
+- Last confirmed commit: `095a5af` (MEMORY update, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
-1. The owner configures the `ghp` and `glp` remotes and pushes `main` and the working branch.
-2. Task T1: the agent writes the token guide; the owner creates `monitor-cbt-analytics-readonly`
-   and stores it in Bitwarden and `web/.dev.vars`.
+1. Task T2: project skeleton in `web/` (the agent shows the plan and the dependency install commands first).
 
 ## Known pending tasks
-- Move `cobtec.net` DNS from GoDaddy to Cloudflare (copy the Outlook MX and email TXT/CNAME records as DNS only). Required before T12.
-- Verify that Access one-time PIN is included in the Zero Trust Free plan (before T12).
+- Analytics token `monitor-cbt-analytics-readonly` expires 2026-12-31 23:59 ECT (owner's common date for all tokens): renew from 2026-12-01 following `docs/SERVICES_AND_COSTS.md`.
+- `cobtec.net` DNS stays at GoDaddy (decided 2026-10-29): the family's Outlook.com personalized addresses depend on it and cannot be re-added if lost. The monitor uses the workers.dev URL + Access, with a GoDaddy redirect from `monitor.cobtec.net`. Domain expires 2027-01-28: renew in time.
+- Verify that Access one-time PIN and one-click Access on `workers.dev` work on the Zero Trust Free plan (before T12).
 - Legal: put the verbal delegated-administration agreements with SOMA and BORAEI in writing; confirm LOPDP roles and legitimate interest for IPs with an advisor; check the clients' privacy policies (`docs/LEGAL.md`).
 - Move to Node 24 LTS before April 2027.
 - Design: the CBT design system and the "CBT Monitoreo" prototype are a visual reference for spec 003; the landing animation conflicts with the design system's "no animation" rule.

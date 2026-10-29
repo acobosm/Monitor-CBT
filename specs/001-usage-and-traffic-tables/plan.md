@@ -30,7 +30,7 @@ All paths are under `web/`.
 | File | Content |
 |---|---|
 | `package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts` | Project setup and scripts (`dev`, `typecheck`, `test`, `deploy`). |
-| `wrangler.jsonc` | Worker `monitor-cbt`, two D1 bindings, cron `0 1 * * *`, `workers_dev: false`, preview URLs off, Custom Domain `monitor.cobtec.net`, Access team domain and AUD. |
+| `wrangler.jsonc` | Worker `monitor-cbt`, two D1 bindings, cron `0 1 * * *`, `workers_dev: true`, `preview_urls: false`, no routes or Custom Domain, Access team domain and AUD. |
 | `.dev.vars.example` | `CLOUDFLARE_ANALYTICS_TOKEN`, `ALLOWED_EMAILS`, local Access bypass flag, with no real values. |
 | `src/index.ts` | Hono app, static UI serving, `scheduled` handler. |
 | `src/access.ts` | Access JWT validation, `ALLOWED_EMAILS`, local bypass (R1–R4). |
@@ -91,7 +91,8 @@ All paths are under `web/`.
 | 10 ms CPU per invocation | Keep JSON per query small; if not enough, split the work across several crons (5 per account). |
 | `clientIP` not available on Free | R27 shows the notice; everything else works. |
 | 300 GraphQL queries per 5 minutes | About 15 queries per daily run and about 10 per dashboard open; the current-day read is cached for 60 seconds. |
-| One-time PIN might not be included in Access Free | Checked while configuring Access, before the first deploy. |
+| One-time PIN or one-click Access on `workers.dev` might not be included in Access Free | Checked while configuring Access, before the first deploy. If one-click is not available, create the Access application for the `workers.dev` hostname by hand. |
+| The `workers.dev` URL is reachable before Access is on | First deploy ships with Access already configured, or with the Worker rejecting everything (fail closed, R3) until it is. |
 | IPs are personal data | Top 20 per kind, deleted after 13 months, visible only to the owner. |
 
 ## Testing strategy

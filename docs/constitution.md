@@ -32,7 +32,8 @@ Non-negotiable principles. Every spec, plan, and code change must respect them. 
   Only emails listed in the Access policy can sign in; there is no public page.
 - The Worker validates the Access JWT (signature and audience) on every `/api/*` request and takes
   the email from it; without a valid JWT it denies access (fail closed).
-- `workers.dev` and preview URLs are disabled: no entry point bypasses Access.
+- The only entry point is the Worker's `workers.dev` URL, protected by Access; preview URLs are disabled
+  and there are no other routes or domains: no entry point bypasses Access.
 - Second barrier: the Worker keeps its own allowlist of emails with their role, in configuration.
   An email not in that list is rejected even if the Access policy let it in.
 - Roles: one role today, **owner** (sees all sites, exports, sees the audit log). A future **client**
