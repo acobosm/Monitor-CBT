@@ -3,5 +3,5 @@
 CLOUDFLARE_ANALYTICS_TOKEN=
 # Comma-separated emails allowed to use the dashboard.
 ALLOWED_EMAILS=
-# "true" skips the Access check, only for requests from localhost. Never set in production.
+# "true" skips the Access check, only for requests to localhost (wrangler.jsonc keeps "false" for production).
 LOCAL_ACCESS_BYPASS=

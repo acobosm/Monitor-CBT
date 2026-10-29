@@ -14,5 +14,26 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  // Not secrets. Empty until Access is configured (T12): while empty, every /api/* request is denied (R3).
+  // ACCESS_TEAM_DOMAIN looks like https://<team>.cloudflareaccess.com; ACCESS_AUD is the application AUD tag.
+  // LOCAL_ACCESS_BYPASS is "false" in production; only web/.dev.vars may set it to "true" (R4).
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "LOCAL_ACCESS_BYPASS": "false"
+  },
+  // Deploy fails if these are not set as Worker secrets.
+  "secrets": {
+    "required": ["CLOUDFLARE_ANALYTICS_TOKEN", "ALLOWED_EMAILS"]
+  },
+  "d1_databases": [
+    {
+      "binding": "AUDIT_DB",
+      "database_name": "monitor-cbt-audit-db",
+      // Placeholder for local development; the real ID is set when the database is created (T12).
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations/audit"
+    }
+  ]
 }

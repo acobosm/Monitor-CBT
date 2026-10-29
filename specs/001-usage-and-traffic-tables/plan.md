@@ -82,8 +82,11 @@ All paths are under `web/`.
   the history. Otherwise the API responds 400 with no data.
 - The token lives only in the Worker environment. Cloudflare errors are sanitized before reaching
   the UI: no raw error, no token (R5).
-- Local bypass works only when the flag is set and the host is `localhost`. The flag is never loaded
-  in production; this is a step of the deploy checklist (R4).
+- Local bypass works only when the flag is set and the host is `localhost`. In `wrangler.jsonc` the flag is a
+  `var` fixed to `"false"`; only `web/.dev.vars` sets it to `"true"`. Deploy checklist: confirm it is not set as
+  a Worker secret (R4).
+- Until Access is configured, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are empty and the Worker denies every
+  `/api/*` request, so a deploy before Access exposes no data (R3).
 - Concurrent runs (manual and scheduled task at once) are safe: writes replace rather than duplicate
   (R30). The dashboard never writes statistics.
 

@@ -13,7 +13,7 @@
     "build": "vite build && rm -f dist/monitor_cbt/.dev.vars",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.ui.json",
     "test": "vitest run",
-    "cf-typegen": "wrangler types",
+    "cf-typegen": "wrangler types --strict-vars=false",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

@@ -83,8 +83,20 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
 - **`.dev.vars` copy in the build:** `vite build` (Cloudflare Vite plugin) writes the local secrets to
   `dist/monitor_cbt/.dev.vars` for `vite preview`. The `build` script deletes it right after; do not use
   `vite preview`, and never run `vite build` directly.
-- **Tests read `.dev.vars`:** the Vitest plugin loads the real local token as a binding. Tests must never
-  call Cloudflare (mocked fixtures only); from T4 tests set dummy bindings explicitly.
+- **Tests use dummy bindings:** `vitest.config.ts` overrides the token, `ALLOWED_EMAILS` and the Access settings
+  with dummy values (a test checks it), and applies the audit migrations to a local D1 in `test/setup.ts`.
+  Access JWTs in tests are signed with a key generated on the fly (`test/helpers/access-jwt.ts`); Cloudflare
+  is never called.
+- **Access settings:** `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are `vars` in `wrangler.jsonc`, empty until T12.
+  While empty, every `/api/*` request gets 403 (fail closed, R3), also in production.
+- **Local bypass:** `LOCAL_ACCESS_BYPASS` is a `var` with value `"false"`; only `web/.dev.vars` sets it to
+  `"true"`, and it only applies to requests to `localhost` (R4). Local identity: `local@localhost`.
+- **Required secrets:** `secrets.required` in `wrangler.jsonc` lists `CLOUDFLARE_ANALYTICS_TOKEN` and
+  `ALLOWED_EMAILS`: deploy fails if they are not set, and `npm run dev` warns if `.dev.vars` lacks them.
+  With `secrets` declared, wrangler only loads from `.dev.vars` the names declared as secrets or vars.
+- **D1 placeholder ID:** `AUDIT_DB` uses `00000000-0000-0000-0000-000000000000` until the remote database is
+  created in T12; local development and tests do not need the real ID.
+- **Types:** `npm run cf-typegen` runs `wrangler types --strict-vars=false` so vars are typed as `string`.
 - **Two tsconfigs:** `tsconfig.json` (Worker, tests, configs, Workers runtime types) and
   `tsconfig.ui.json` (UI, DOM types); browser and Workers types conflict in one project.
   `npm run typecheck` runs both.
