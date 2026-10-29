@@ -94,8 +94,10 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
 - **Required secrets:** `secrets.required` in `wrangler.jsonc` lists `CLOUDFLARE_ANALYTICS_TOKEN` and
   `ALLOWED_EMAILS`: deploy fails if they are not set, and `npm run dev` warns if `.dev.vars` lacks them.
   With `secrets` declared, wrangler only loads from `.dev.vars` the names declared as secrets or vars.
-- **D1 placeholder ID:** `AUDIT_DB` uses `00000000-0000-0000-0000-000000000000` until the remote database is
-  created in T12; local development and tests do not need the real ID.
+- **D1 placeholder IDs:** `AUDIT_DB` uses `00000000-0000-0000-0000-000000000000` and `STATS_DB`
+  `00000000-0000-0000-0000-000000000001` until the remote databases are created in T12; local development and
+  tests do not need the real IDs. Tests apply both migration folders in `test/setup.ts` and empty the
+  statistics tables before each test.
 - **Types:** `npm run cf-typegen` runs `wrangler types --strict-vars=false` so vars are typed as `string`.
 - **Two tsconfigs:** `tsconfig.json` (Worker, tests, configs, Workers runtime types) and
   `tsconfig.ui.json` (UI, DOM types); browser and Workers types conflict in one project.

@@ -34,6 +34,13 @@
       // Placeholder for local development; the real ID is set when the database is created (T12).
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations/audit"
+    },
+    {
+      "binding": "STATS_DB",
+      "database_name": "monitor-cbt-statistics-db",
+      // Placeholder for local development; the real ID is set when the database is created (T12).
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations/statistics"
     }
   ]
 }

@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig(async () => {
   const auditMigrations = await readD1Migrations("./migrations/audit");
+  const statsMigrations = await readD1Migrations("./migrations/statistics");
 
   return {
     plugins: [
@@ -12,6 +13,7 @@ export default defineConfig(async () => {
           // Dummy values: tests never use the real token or emails from .dev.vars.
           bindings: {
             TEST_AUDIT_MIGRATIONS: auditMigrations,
+            TEST_STATS_MIGRATIONS: statsMigrations,
             CLOUDFLARE_ANALYTICS_TOKEN: "test-token",
             ALLOWED_EMAILS: "owner@example.com",
             LOCAL_ACCESS_BYPASS: "false",

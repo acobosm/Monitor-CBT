@@ -34,7 +34,8 @@ All `day` fields are Cloudflare's UTC day (19:00 to 19:00 ECT), as `YYYY-MM-DD`.
 | value | integer | yes | no | Value for that day. |
 | fetched_at | text | yes | no | When it was read from the API (ISO UTC). |
 
-Key: (day, account_id, product, metric).
+Key: (day, account_id, product, metric). Every metric is stored even when its value is 0 (e.g. an account
+without Workers), so a processed day never looks missing to the backfill (R31).
 
 ### traffic_daily (`monitor-cbt-statistics-db`)
 | Field | Type | Required | Sensitive | Description |
@@ -73,6 +74,7 @@ Key: (day, site_id, country).
 
 Key: (day, site_id, kind, ip). Only the top 20 IPs per site, per day and per kind are stored (up to 40).
 An IP with more than one security action that day keeps the one with most events.
+`action` is required for `security` rows and empty for `traffic` rows (CHECK in the migration).
 
 ### dataset_availability (`monitor-cbt-statistics-db`)
 | Field | Type | Required | Sensitive | Description |
@@ -111,6 +113,13 @@ database (checked on 2026-10-28 at developers.cloudflare.com/d1/platform/limits)
 Pending legal question (see `docs/LEGAL.md`): the legal basis for storing visitor IPs would be
 legitimate interest in security under Ecuador's personal data protection law (LOPDP); to be
 confirmed with a legal advisor, together with whether the clients' privacy policies mention it.
+
+## Writes (T6)
+- Each day of an account (`saveAccountDay`) or of a site (`saveSiteDay`) is written in one D1 `batch()`:
+  it runs as a transaction (all or nothing) and counts as one query against the 50 per invocation on Free.
+- Processing a day again replaces it (R30): usage, countries and IPs of that day are deleted and inserted
+  again inside the batch, so rows that disappeared in the new run do not stay; traffic is upserted.
+- The write keeps only the top 20 IPs per kind, ordered by requests and then by IP (R29).
 
 ## GraphQL sources (T3 discovery, 2026-10-29)
 Checked with the `settings` node and one real read per account and zone. All datasets below are
