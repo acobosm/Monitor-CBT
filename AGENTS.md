@@ -54,10 +54,10 @@ uses it; clients receive Excel reports on request.
 
 ## Workflow (SDD, details in docs/PROCESS.md)
 <!-- UNIVERSAL -->
-1. Start by reading MEMORY.md (status and next step) and the active spec in `specs/`.
+1. Start by reading MEMORY.md (status and next step) and the active spec in `specs/`. Then evidence the work in Notion (Code Projects → Monitor-CBT → Registro de actividades): add a row for the session with its start time, and complete any earlier work or open session still missing from the log (never invent hours: ask the owner).
 2. Show the plan before writing code; when facing decisions, give 2-3 options with pros, cons, and a recommendation.
-3. Work in small tasks (`tasks.md`): each ends with typecheck + tests, and user testing locally if it touches the UI.
-4. When closing the session: update `tasks.md`, `MEMORY.md`, and affected documents, and translate them into English.
+3. Work in small tasks (`tasks.md`): each ends with typecheck + tests, and user testing locally if it touches the UI. Add each commit's hash to the session row in Notion.
+4. When closing the session: update `tasks.md`, `MEMORY.md`, and affected documents, and translate them into English. In Notion, complete the session row (end time, pauses, summary) and update the project row.
 
 ## Document Language
 <!-- UNIVERSAL -->
