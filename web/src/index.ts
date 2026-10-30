@@ -1,13 +1,15 @@
 import { Hono } from "hono";
 import { accessMiddleware, remoteAccessKeys, type AccessVariables, type KeyResolver } from "./access";
 import { runDailyTask } from "./cron";
+import { apiRoutes, type ApiDeps } from "./routes/api";
 
-export function createApp(resolveKeys: KeyResolver = remoteAccessKeys) {
+export function createApp(resolveKeys: KeyResolver = remoteAccessKeys, deps: ApiDeps = {}) {
   const app = new Hono<{ Bindings: Env; Variables: AccessVariables }>();
 
   app.use("/api/*", accessMiddleware(resolveKeys));
 
   app.get("/api/ping", (c) => c.json({ ok: true }));
+  app.route("/api", apiRoutes(deps));
 
   return app;
 }

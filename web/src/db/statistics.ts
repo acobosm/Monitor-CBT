@@ -152,3 +152,85 @@ export async function saveDatasetAvailability(db: D1Database, rows: DatasetAvail
   const at = checkedAt.toISOString();
   await db.batch(rows.map((r) => upsert.bind(r.scope, r.tag, r.dataset, r.enabled ? 1 : 0, r.notOlderThanS, r.maxDurationS, at)));
 }
+
+export interface StoredUsage {
+  /** Metrics per account and day, from `fromDay` on. */
+  accounts: Record<string, Record<string, UsageMetric[]>>;
+  /** Last day stored for any account; null without history (R35, R42). */
+  lastDay: string | null;
+}
+
+/** Usage history of every account, in one batch. */
+export async function readUsage(db: D1Database, fromDay: string): Promise<StoredUsage> {
+  const [rows, last] = await db.batch<Record<string, unknown>>([
+    db.prepare("SELECT account_id, day, product, metric, value FROM usage_daily WHERE day >= ?").bind(fromDay),
+    db.prepare("SELECT MAX(day) AS day FROM usage_daily"),
+  ]);
+  const accounts: StoredUsage["accounts"] = {};
+  for (const r of (rows?.results ?? []) as unknown as (UsageMetric & { account_id: string; day: string })[]) {
+    const days = (accounts[r.account_id] ??= {});
+    (days[r.day] ??= []).push({ product: r.product, metric: r.metric, value: r.value });
+  }
+  return { accounts, lastDay: (last?.results[0]?.day as string | null | undefined) ?? null };
+}
+
+export interface StoredSite {
+  /** Every stored day, oldest first: the days that can be selected (R24). */
+  days: string[];
+  traffic: Record<string, TrafficTotals>;
+}
+
+/** Stored days of one site and the totals from `fromDay` on (R21). */
+export async function readSiteTraffic(db: D1Database, siteId: string, fromDay: string): Promise<StoredSite> {
+  const [days, traffic] = await db.batch<Record<string, unknown>>([
+    db.prepare("SELECT day FROM traffic_daily WHERE site_id = ? ORDER BY day").bind(siteId),
+    db
+      .prepare("SELECT day, requests, visits, page_views, bytes FROM traffic_daily WHERE site_id = ? AND day >= ?")
+      .bind(siteId, fromDay),
+  ]);
+  const totals = (traffic?.results ?? []) as unknown as (Omit<TrafficTotals, "pageViews"> & { day: string; page_views: number | null })[];
+  return {
+    days: (days?.results ?? []).map((r) => r.day as string),
+    traffic: Object.fromEntries(
+      totals.map((t) => [t.day, { requests: t.requests, visits: t.visits, pageViews: t.page_views, bytes: t.bytes }]),
+    ),
+  };
+}
+
+/** Countries and top IPs of one site and day (R24–R26). */
+export async function readSiteDayDetail(
+  db: D1Database,
+  siteId: string,
+  day: string,
+): Promise<{ countries: CountryCount[]; ips: IpCount[] }> {
+  const [countries, ips] = await db.batch<Record<string, unknown>>([
+    db.prepare("SELECT country, requests FROM country_daily WHERE day = ? AND site_id = ?").bind(day, siteId),
+    db
+      .prepare("SELECT kind, ip, country, action, requests, last_seen_hour FROM ip_daily WHERE day = ? AND site_id = ?")
+      .bind(day, siteId),
+  ]);
+  const rows = (ips?.results ?? []) as unknown as {
+    kind: IpCount["kind"];
+    ip: string;
+    country: string | null;
+    action: "block" | "challenge" | null;
+    requests: number;
+    last_seen_hour: string | null;
+  }[];
+  return {
+    countries: (countries?.results ?? []) as unknown as CountryCount[],
+    ips: rows.map((r): IpCount => {
+      const base = { ip: r.ip, country: r.country, requests: r.requests, lastSeenHour: r.last_seen_hour };
+      return r.kind === "security" ? { ...base, kind: "security", action: r.action ?? "block" } : { ...base, kind: "traffic" };
+    }),
+  };
+}
+
+/** Whether the discovery found a zone dataset enabled; undefined when it has not run yet (R27). */
+export async function zoneDatasets(db: D1Database, zoneTag: string): Promise<Record<string, boolean>> {
+  const { results } = await db
+    .prepare("SELECT dataset, enabled FROM dataset_availability WHERE scope = 'zone' AND tag = ?")
+    .bind(zoneTag)
+    .all<{ dataset: string; enabled: number }>();
+  return Object.fromEntries(results.map((r) => [r.dataset, r.enabled === 1]));
+}

@@ -81,6 +81,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R33. IF reading one account or zone fails, THEN the system SHALL continue with the others and log the error; that day stays missing for the backfill.
 - R34. WHEN the dashboard opens, the system SHALL read the current day from the API without storing it, because it is partial.
 - R35. IF the API does not respond when the dashboard opens, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Se muestra el historial guardado hasta el <fecha>."
+- R42. IF the API does not respond and no history is stored, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Aún no hay historial guardado." (P10)
 
 ### UI and discovery
 - R36. The system SHALL show on the home page a module selector with a single option, "Cloudflare - Consumo y Tráfico", which leads to the dashboard.
@@ -92,7 +93,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 
 ## Definition of Done
 <!-- UNIVERSAL -->
-- Automated tests for every requirement that can be tested automatically (list: R1–R39, R41; R40 is checked by hand in production).
+- Automated tests for every requirement that can be tested automatically (list: R1–R39, R41, R42; R40 is checked by hand in production).
 - User testing locally for what touches the interface.
 - Documentation affected by this spec updated.
 - The token creation guide is written, and the owner created the new token `monitor-cbt-analytics-readonly` with it.
@@ -129,3 +130,6 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P9.** (From T9.) Cloudflare already keeps the last 31 days of traffic and 90 of usage when the monitor starts. Copying 30 days of traffic needs 2 queries per site and day (about 180), more than the 50 subrequests per run.
   A: an extra hourly cron that only copies the past (full month in about 12 hours). B: only the daily cron (over a week, some old days lost). C: do not copy the past; history starts on the first run and recovery only fills days that fail afterwards.
   **Answer:** C (2026-10-29). Applied in R31 and scope item 7. One cron only.
+- **P10.** (From T10.) R35 names the date of the last stored day, but on the first day there is none, because the past is not copied (P9). What is displayed?
+  A (recommended): "No pudimos leer los datos recientes de Cloudflare. Aún no hay historial guardado." B: only the first sentence.
+  **Answer:** A (2026-10-30). Applied in R42.

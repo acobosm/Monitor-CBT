@@ -41,6 +41,8 @@ All paths are under `web/`.
 | `src/cloudflare/graphql.ts` | GraphQL client (sends a query, returns JSON). |
 | `src/cloudflare/queries.ts` | Queries: usage, traffic, countries, IPs, security events, `settings`. |
 | `src/cloudflare/token.ts` | `tokens/verify` call. |
+| `src/logic/notices.ts` | Pure: Cloudflare error notices (R11, R35, R42). |
+| `src/logic/cache.ts` | Pure: 60-second cache of live reads (R34). |
 | `src/logic/usage.ts` | Pure: %, thresholds, projections, 7-day peak, R2 Class A/B (R14–R20). |
 | `src/logic/traffic.ts` | Pure: traffic, countries and top 20 IP parsing (R21–R26, R29). |
 | `src/logic/token.ts` | Pure: remaining days and state (R8–R13). |
@@ -97,7 +99,7 @@ All paths are under `web/`.
 | 10 ms CPU per invocation | Keep JSON per query small; if not enough, split the work across several crons (5 per account). |
 | A dataset is disabled on Free | T3 (2026-10-29): everything needed is enabled, `clientIP` included; only `firewallEventsAdaptiveGroups` is disabled and is not used (security IPs come from `httpRequestsAdaptiveGroups` filtered by `securityAction`). R27 covers future changes. |
 | Adaptive datasets are sampled | Counts are estimates under high traffic; at current volumes (hundreds to a few thousand requests per day) they are practically exact. |
-| 300 GraphQL queries per 5 minutes | About 15 queries per daily run and about 10 per dashboard open; the current-day read is cached for 60 seconds. |
+| 300 GraphQL queries per 5 minutes | About 15 queries per daily run and about 10 per dashboard open; the current-day read is cached for 60 seconds in the Worker's memory, per isolate (the Cache API is not available for Workers fronted by Access, checked 2026-10-30). |
 | One-time PIN or one-click Access on `workers.dev` might not be included in Access Free | Checked while configuring Access, before the first deploy. If one-click is not available, create the Access application for the `workers.dev` hostname by hand. |
 | The `workers.dev` URL is reachable before Access is on | First deploy ships with Access already configured, or with the Worker rejecting everything (fail closed, R3) until it is. |
 | IPs are personal data | Top 20 per kind, deleted after 13 months, visible only to the owner. |

@@ -118,6 +118,14 @@ export function parseAccountUsage(data: AccountUsageData, days: string[]): Parse
   };
 }
 
+/**
+ * Metrics of a day still in progress. Storage and database counts may not be reported yet early in the
+ * day: a 0 there means "unknown", so it is dropped and the latest known value is shown instead (R18).
+ */
+export function partialDayMetrics(metrics: UsageMetric[]): UsageMetric[] {
+  return metrics.filter((m) => m.value > 0 || !(m.metric.endsWith("_bytes") || m.metric === "database_count"));
+}
+
 export type UsageState = "ok" | "near" | "critical" | "exceeded" | "unconfigured";
 
 export interface UsageRow {

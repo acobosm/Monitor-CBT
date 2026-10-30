@@ -1,17 +1,17 @@
 # MEMORY.md — Project Status
-_Last updated: 2026-10-29_
+_Last updated: 2026-10-30_
 
 <!-- UNIVERSAL: este archivo es una foto del estado actual, no una bitácora. Se reescribe al cerrar cada sesión y se mantiene corto (unas 30 líneas). La historia vive en git y en las specs. -->
 
 ## Where we are
 - Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: spec 001 in progress; T1–T9 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic, daily task).
-- Last confirmed commit: `f5e849b` (T8 + P8, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
+- Project phase: spec 001 in progress; T1–T10 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic, daily task, API; T10 not committed yet).
+- Last confirmed commit: `1091e26` (Notion log rule, 2026-10-30; T9 is `bce5260`; on `001-usage-and-traffic-tables`; `main` at `415d550`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
-1. Task T10: API routes (usage, sites, token, audit, input validation, cached current day).
+1. Task T11: table UI (home, menu, usage, sites, token notice, "Salir", footer, fonts); the owner tests it locally, which is also the first try of the API against real data.
 
 ## Known pending tasks
 - Analytics token `monitor-cbt-analytics-readonly` valid 2026-10-29 to 2026-12-31 23:59 ECT (owner's common date for all tokens): renew from 2026-12-01 following `docs/SERVICES_AND_COSTS.md`. When creating tokens, the TTL start date must be today (one was created with start = end day).

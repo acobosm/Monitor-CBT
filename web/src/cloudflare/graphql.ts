@@ -14,6 +14,12 @@ export class GraphQLError extends Error {
   }
 }
 
+/** What may be logged about an error: never the token, raw responses, IPs or emails. */
+export function describeError(error: unknown): string {
+  if (error instanceof GraphQLError) return `${error.kind}: ${error.message}`;
+  return error instanceof Error ? error.name : "unknown error";
+}
+
 const MAX_MESSAGE = 200;
 
 export async function graphql<T>(

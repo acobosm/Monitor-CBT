@@ -3,7 +3,7 @@
 // Budget: Workers Free allows 50 subrequests per invocation (fetch and D1 counted together here).
 // A normal run uses about 20; the worst case with the full recovery cap stays below 50.
 import sitesJson from "../config/sites.json";
-import { graphql, GraphQLError } from "./cloudflare/graphql";
+import { describeError, graphql } from "./cloudflare/graphql";
 import {
   ACCOUNT_USAGE_QUERY,
   settingsQuery,
@@ -48,12 +48,6 @@ export interface DailyTaskSummary {
 }
 
 const defaultConfig: DailyTaskConfig = { accounts: sitesJson.accounts, sites: sitesJson.sites as SiteConfig[] };
-
-/** What may be logged about an error: never the token, raw responses, IPs or emails. */
-function describe(error: unknown): string {
-  if (error instanceof GraphQLError) return `${error.kind}: ${error.message}`;
-  return error instanceof Error ? error.name : "unknown error";
-}
 
 async function storeSiteDay(env: Env, site: SiteConfig, day: string, fetchFn: typeof fetch): Promise<void> {
   const token = env.CLOUDFLARE_ANALYTICS_TOKEN;
@@ -101,7 +95,7 @@ export async function runDailyTask(
     await saveDatasetAvailability(db, parseSettings(settings, accountIds, zoneTags), now);
   } catch (error) {
     summary.discovery = "failed";
-    console.error("discovery failed", describe(error));
+    console.error("discovery failed", describeError(error));
   }
 
   const stored = await storedDays(db, windowStart);
@@ -118,7 +112,7 @@ export async function runDailyTask(
       summary.accountsStored.push(account.id);
     } catch (error) {
       summary.accountsFailed.push(account.id);
-      console.error("account usage failed", { account: account.id, error: describe(error) });
+      console.error("account usage failed", { account: account.id, error: describeError(error) });
     }
   }
 
@@ -140,7 +134,7 @@ export async function runDailyTask(
       summary.siteDaysStored.push(`${site.id}:${day}`);
     } catch (error) {
       summary.siteDaysFailed.push(`${site.id}:${day}`);
-      console.error("site traffic failed", { site: site.id, day, error: describe(error) });
+      console.error("site traffic failed", { site: site.id, day, error: describeError(error) });
     }
   }
 
@@ -148,7 +142,7 @@ export async function runDailyTask(
   try {
     summary.ipsPurged = await purgeIpsBefore(db, ipCutoffDay(now));
   } catch (error) {
-    console.error("IP purge failed", describe(error));
+    console.error("IP purge failed", describeError(error));
   }
 
   console.log("daily task", summary);
