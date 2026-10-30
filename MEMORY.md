@@ -6,12 +6,12 @@ _Last updated: 2026-10-29_
 ## Where we are
 - Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: spec 001 in progress; T1–T8 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic).
-- Last confirmed commit: `732e8d2` (T7, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
+- Project phase: spec 001 in progress; T1–T9 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic, daily task).
+- Last confirmed commit: `f5e849b` (T8 + P8, 2026-10-29, on `001-usage-and-traffic-tables`; `main` at `415d550`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
-1. Task T9: daily task (cron, capped backfill, IP purge, daily discovery).
+1. Task T10: API routes (usage, sites, token, audit, input validation, cached current day).
 
 ## Known pending tasks
 - Analytics token `monitor-cbt-analytics-readonly` valid 2026-10-29 to 2026-12-31 23:59 ECT (owner's common date for all tokens): renew from 2026-12-01 following `docs/SERVICES_AND_COSTS.md`. When creating tokens, the TTL start date must be today (one was created with start = end day).

@@ -147,7 +147,8 @@ enabled on the Free plan for the 3 accounts and 3 zones.
 - `firewallEventsAdaptiveGroups` is **disabled** on Free; `firewallEventsAdaptive` (raw events) is enabled
   but not used, because grouped requests give the same counts and are not cut at 10,000 rows.
 - Adaptive datasets are sampled (`avg.sampleInterval`); counts are estimates under high traffic.
-- "History" is counted back from the query time, so the backfill covers 30 complete days (P6).
+- "History" is counted back from the query time, so recovery covers 30 complete days (P6).
+- History in D1 starts on the first run of the daily task: the past that Cloudflare still keeps is not copied (P9).
 - Account datasets keep 90 days, more than the 30-day backfill.
 
 ## Backups and restore

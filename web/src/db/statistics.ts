@@ -55,21 +55,14 @@ export function topIps(ips: IpCount[], limit = TOP_IPS): IpCount[] {
 }
 
 /** Replaces all usage metrics of one account and day (R30). */
-export async function saveAccountDay(
+export function saveAccountDay(
   db: D1Database,
   day: string,
   accountId: string,
   metrics: UsageMetric[],
   fetchedAt = new Date(),
 ): Promise<void> {
-  const at = fetchedAt.toISOString();
-  const insert = db.prepare(
-    "INSERT INTO usage_daily (day, account_id, product, metric, value, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
-  );
-  await db.batch([
-    db.prepare("DELETE FROM usage_daily WHERE day = ? AND account_id = ?").bind(day, accountId),
-    ...metrics.map((m) => insert.bind(day, accountId, m.product, m.metric, m.value, at)),
-  ]);
+  return saveAccountDays(db, accountId, { [day]: metrics }, fetchedAt);
 }
 
 /** Replaces the traffic, countries and top IPs of one site and day (R29, R30). */
@@ -102,21 +95,50 @@ export async function purgeIpsBefore(db: D1Database, cutoffDay: string): Promise
   return result.meta.changes;
 }
 
-async function days(statement: D1PreparedStatement): Promise<string[]> {
-  const { results } = await statement.all<{ day: string }>();
-  return results.map((row) => row.day);
+export interface StoredDays {
+  /** Stored days from `fromDay` on, per site or account id. */
+  days: Record<string, string[]>;
+  /** First day ever stored, per site or account id (history starts there, P9). */
+  first: Record<string, string>;
 }
 
-/** Days with stored traffic for a site, from `fromDay` on (R31). */
-export function storedSiteDays(db: D1Database, siteId: string, fromDay: string): Promise<string[]> {
-  return days(db.prepare("SELECT day FROM traffic_daily WHERE site_id = ? AND day >= ? ORDER BY day").bind(siteId, fromDay));
+function group(rows: { id: string; day: string }[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const { id, day } of rows) (out[id] ??= []).push(day);
+  return out;
 }
 
-/** Days with stored usage for an account, from `fromDay` on (R31). */
-export function storedAccountDays(db: D1Database, accountId: string, fromDay: string): Promise<string[]> {
-  return days(
-    db.prepare("SELECT DISTINCT day FROM usage_daily WHERE account_id = ? AND day >= ? ORDER BY day").bind(accountId, fromDay),
+/** Stored days of every site and account, and their first stored day, in one batch (R31). */
+export async function storedDays(db: D1Database, fromDay: string): Promise<{ sites: StoredDays; accounts: StoredDays }> {
+  const [siteDays, siteFirst, accountDays, accountFirst] = await db.batch<{ id: string; day: string }>([
+    db.prepare("SELECT site_id AS id, day FROM traffic_daily WHERE day >= ? ORDER BY day").bind(fromDay),
+    db.prepare("SELECT site_id AS id, MIN(day) AS day FROM traffic_daily GROUP BY site_id"),
+    db.prepare("SELECT DISTINCT account_id AS id, day FROM usage_daily WHERE day >= ? ORDER BY day").bind(fromDay),
+    db.prepare("SELECT account_id AS id, MIN(day) AS day FROM usage_daily GROUP BY account_id"),
+  ]);
+  const first = (rows: { id: string; day: string }[]) => Object.fromEntries(rows.map((r) => [r.id, r.day]));
+  return {
+    sites: { days: group(siteDays?.results ?? []), first: first(siteFirst?.results ?? []) },
+    accounts: { days: group(accountDays?.results ?? []), first: first(accountFirst?.results ?? []) },
+  };
+}
+
+/** Replaces several days of one account in one batch (R30). */
+export async function saveAccountDays(
+  db: D1Database,
+  accountId: string,
+  days: Record<string, UsageMetric[]>,
+  fetchedAt = new Date(),
+): Promise<void> {
+  const at = fetchedAt.toISOString();
+  const insert = db.prepare(
+    "INSERT INTO usage_daily (day, account_id, product, metric, value, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
   );
+  const statements = Object.entries(days).flatMap(([day, metrics]) => [
+    db.prepare("DELETE FROM usage_daily WHERE day = ? AND account_id = ?").bind(day, accountId),
+    ...metrics.map((m) => insert.bind(day, accountId, m.product, m.metric, m.value, at)),
+  ]);
+  if (statements.length) await db.batch(statements);
 }
 
 /** Records which datasets the token can read and how far back (R41). */

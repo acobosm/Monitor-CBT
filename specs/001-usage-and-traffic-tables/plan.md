@@ -93,7 +93,7 @@ All paths are under `web/`.
 ## Risks
 | Risk | Mitigation |
 |---|---|
-| 50 subrequests per invocation on Workers Free; a naive daily task makes ~45 queries and backfill would exceed it | One GraphQL query per account covers 31 days (T7). Sites need 2 queries per site and day (the hours query needs the top IPs first, T8): about 6 per day for the 3 sites, so the daily task caps the backfilled days per run and fills the rest on the next runs (T9). |
+| 50 subrequests per invocation on Workers Free; a naive daily task makes ~45 queries and backfill would exceed it | One GraphQL query per account covers 31 days (T7). Sites need 2 queries per site and day (the hours query needs the top IPs first, T8): about 6 per day for the 3 sites, so the daily task caps the recovered site-days at 8 per run (T9). With P9 (no copy of the past) a normal run uses about 20 subrequests (fetch + D1) and the worst case 44. |
 | 10 ms CPU per invocation | Keep JSON per query small; if not enough, split the work across several crons (5 per account). |
 | A dataset is disabled on Free | T3 (2026-10-29): everything needed is enabled, `clientIP` included; only `firewallEventsAdaptiveGroups` is disabled and is not used (security IPs come from `httpRequestsAdaptiveGroups` filtered by `securityAction`). R27 covers future changes. |
 | Adaptive datasets are sampled | Counts are estimates under high traffic; at current volumes (hundreds to a few thousand requests per day) they are practically exact. |

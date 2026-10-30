@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ectHourRange, ipCutoffDay, isPartialDay, missingDays, previousUtcDay, utcDay } from "../../src/logic/days";
+import { ectHourRange, gapDays, ipCutoffDay, isPartialDay, missingDays, previousUtcDay, utcDay } from "../../src/logic/days";
 
 describe("utcDay", () => {
   it("uses the UTC day, so 19:00 ECT already belongs to the next day", () => {
@@ -77,5 +77,21 @@ describe("R25 R26 ectHourRange", () => {
 
   it("rejects an invalid hour", () => {
     expect(() => ectHourRange("not a date")).toThrow();
+  });
+});
+
+describe("R31 P9 gapDays", () => {
+  const now = new Date("2026-10-30T01:00:00Z");
+
+  it("returns nothing before the first run: history starts there", () => {
+    expect(gapDays([], null, now)).toEqual([]);
+  });
+
+  it("returns only missing days after the first stored day", () => {
+    expect(gapDays(["2026-10-25", "2026-10-28"], "2026-10-25", now)).toEqual(["2026-10-26", "2026-10-27", "2026-10-29"]);
+  });
+
+  it("treats the whole window as recoverable when history started earlier", () => {
+    expect(gapDays([], "2026-01-01", now)).toHaveLength(30);
   });
 });

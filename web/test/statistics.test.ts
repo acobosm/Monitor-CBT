@@ -5,8 +5,8 @@ import {
   saveAccountDay,
   saveDatasetAvailability,
   saveSiteDay,
-  storedAccountDays,
-  storedSiteDays,
+  saveAccountDays,
+  storedDays,
   type IpCount,
   type SiteDay,
 } from "../src/db/statistics";
@@ -144,7 +144,7 @@ describe("R32 IP purge", () => {
 });
 
 describe("R31 stored days", () => {
-  it("lists the stored days of a site and of an account from a given day", async () => {
+  it("lists stored days per site and account from a given day, and the first day ever stored", async () => {
     for (const day of ["2026-09-28", "2026-10-01", "2026-10-02"]) {
       await saveSiteDay(db, siteDay({ day }));
       await saveAccountDay(db, day, "acc", [
@@ -152,9 +152,23 @@ describe("R31 stored days", () => {
         { product: "d1", metric: "rows_read", value: 1 },
       ]);
     }
-    expect(await storedSiteDays(db, "soma", "2026-09-30")).toEqual(["2026-10-01", "2026-10-02"]);
-    expect(await storedSiteDays(db, "boraei", "2026-09-30")).toEqual([]);
-    expect(await storedAccountDays(db, "acc", "2026-09-30")).toEqual(["2026-10-01", "2026-10-02"]);
+    const stored = await storedDays(db, "2026-09-30");
+    expect(stored.sites).toEqual({ days: { soma: ["2026-10-01", "2026-10-02"] }, first: { soma: "2026-09-28" } });
+    expect(stored.accounts).toEqual({ days: { acc: ["2026-10-01", "2026-10-02"] }, first: { acc: "2026-09-28" } });
+  });
+
+  it("is empty before the first run", async () => {
+    expect(await storedDays(db, "2026-09-30")).toEqual({ sites: { days: {}, first: {} }, accounts: { days: {}, first: {} } });
+  });
+
+  it("saves several days of an account in one batch, replacing them", async () => {
+    const m = (value: number) => [{ product: "workers" as const, metric: "requests", value }];
+    await saveAccountDays(db, "acc", { "2026-10-01": m(1), "2026-10-02": m(2) });
+    await saveAccountDays(db, "acc", { "2026-10-02": m(5) });
+    expect((await db.prepare("SELECT day, value FROM usage_daily ORDER BY day").all()).results).toEqual([
+      { day: "2026-10-01", value: 1 },
+      { day: "2026-10-02", value: 5 },
+    ]);
   });
 });
 

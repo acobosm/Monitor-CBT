@@ -18,7 +18,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 5. Traffic per site: requests, visits, page views, bytes, countries, top 20 IPs by traffic and top 20
    IPs by security events.
 6. Remaining days of the token, with a warning.
-7. Daily task into D1, backfill of missing days (up to 30) and deletion of IPs older than 13 months.
+7. Daily task into D1 (history starts on the first run), recovery of days that fail afterwards (up to 30 days back) and deletion of IPs older than 13 months.
 8. Audit of data views in `monitor-cbt-audit-db`.
 9. UI: home page with the module selector "Cloudflare - Consumo y Tráfico" and a dashboard made of
    tables, with the footer "Powered by CBT · © 2026".
@@ -76,7 +76,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R28. WHEN the daily task runs (01:00 UTC, 20:00 ECT; P3), the system SHALL fetch the previous UTC day for every account and zone and store it in `monitor-cbt-statistics-db`.
 - R29. The system SHALL store only the top 20 IPs per site, per day and per kind (traffic, security).
 - R30. IF a day is processed twice, THEN the system SHALL replace that day's rows without duplicating them.
-- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 30 days and fill them in. (P6)
+- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 30 days that come after the first stored day, and fill them in; days before the first stored day are not fetched. (P6, P9)
 - R32. WHEN the daily task runs, the system SHALL delete IPs older than 13 months.
 - R33. IF reading one account or zone fails, THEN the system SHALL continue with the others and log the error; that day stays missing for the backfill.
 - R34. WHEN the dashboard opens, the system SHALL read the current day from the API without storing it, because it is partial.
@@ -126,3 +126,6 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P8.** (From T8.) D1 Free also limits each database to 500 MB and each account to 10 databases; SOMA already has 6 databases and the monitor adds 2 to COBTEC. Should the table show them?
   A (recommended): yes, rows "Base más grande" (500 MB, with its ID) and "Cantidad de bases" (10), with the same thresholds and projections. B: later.
   **Answer:** A (2026-10-29). Applied in scope item 4 and R14. The owner also asked for a daily chart per metric with the limit line: recorded for spec 003 (charts).
+- **P9.** (From T9.) Cloudflare already keeps the last 31 days of traffic and 90 of usage when the monitor starts. Copying 30 days of traffic needs 2 queries per site and day (about 180), more than the 50 subrequests per run.
+  A: an extra hourly cron that only copies the past (full month in about 12 hours). B: only the daily cron (over a week, some old days lost). C: do not copy the past; history starts on the first run and recovery only fills days that fail afterwards.
+  **Answer:** C (2026-10-29). Applied in R31 and scope item 7. One cron only.

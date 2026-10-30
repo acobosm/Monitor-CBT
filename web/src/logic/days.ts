@@ -60,3 +60,12 @@ export function ectHourRange(hourUtc: string): string {
   const hour = (ms: number) => `${String(new Date(ms + ECT_OFFSET_MS).getUTCHours()).padStart(2, "0")}:00`;
   return `${hour(start)}–${hour(start + HOUR_MS)}`;
 }
+
+/**
+ * Days to recover (R31, P9): missing days of the last `window` days that come after the first stored day.
+ * Nothing before the first stored day is fetched: history starts on the first run.
+ */
+export function gapDays(stored: Iterable<string>, firstStored: string | null, now: Date, window = BACKFILL_DAYS): string[] {
+  if (!firstStored) return [];
+  return missingDays(stored, now, window).filter((day) => day > firstStored);
+}

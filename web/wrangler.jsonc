@@ -15,6 +15,10 @@
   "observability": {
     "enabled": true
   },
+  // Daily task at 01:00 UTC (20:00 ECT), one hour after the UTC day closes (R28, P3).
+  "triggers": {
+    "crons": ["0 1 * * *"]
+  },
   // Not secrets. Empty until Access is configured (T12): while empty, every /api/* request is denied (R3).
   // ACCESS_TEAM_DOMAIN looks like https://<team>.cloudflareaccess.com; ACCESS_AUD is the application AUD tag.
   // LOCAL_ACCESS_BYPASS is "false" in production; only web/.dev.vars may set it to "true" (R4).

@@ -112,6 +112,10 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
   listed count as Class A and are named under the table (P7). Recheck the page when one appears.
 - **Usage state vs. display:** the state uses the exact percentage; the shown percentage is truncated to one decimal
   (69.999 % shows 69.9 % and "Normal").
+- **Daily task budget:** `src/cron.ts` counts fetch calls and D1 queries together against the 50 subrequests of Workers
+  Free: about 20 on a normal run (1 discovery, 3 accounts, 2 per site, D1 batches), 44 in the worst case with
+  `GAP_SITE_DAYS_PER_RUN = 8` recovered site-days. A test checks it. Each account and site has its own try/catch (R33);
+  logs carry only ids, days and the error kind.
 - **D1 per database:** the table shows the largest database against 500 MB and the number of databases against 10
   (P8). The analytics token cannot read database names (no D1 permission, on purpose), so the largest one is shown
   by its ID; match it in the Cloudflare dashboard.

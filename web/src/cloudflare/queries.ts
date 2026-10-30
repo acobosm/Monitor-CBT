@@ -117,3 +117,34 @@ export interface SiteDayHoursData {
     }[];
   };
 }
+
+const SETTINGS_FIELDS = "enabled notOlderThan maxDuration";
+export const ACCOUNT_DATASETS = [
+  "workersInvocationsAdaptive",
+  "d1AnalyticsAdaptiveGroups",
+  "d1StorageAdaptiveGroups",
+  "r2OperationsAdaptiveGroups",
+  "r2StorageAdaptiveGroups",
+] as const;
+export const ZONE_DATASETS = ["httpRequestsAdaptiveGroups", "httpRequests1dGroups"] as const;
+
+/** Availability of the datasets for every account (a0, a1…) and zone (z0, z1…) in one subrequest (R41). */
+export function settingsQuery(accountCount: number, zoneCount: number): string {
+  const vars = [
+    ...Array.from({ length: accountCount }, (_, i) => `$a${i}: string!`),
+    ...Array.from({ length: zoneCount }, (_, i) => `$z${i}: string!`),
+  ];
+  const accountBlock = ACCOUNT_DATASETS.map((d) => `${d} { ${SETTINGS_FIELDS} }`).join(" ");
+  const zoneBlock = ZONE_DATASETS.map((d) => `${d} { ${SETTINGS_FIELDS} }`).join(" ");
+  return `query Settings(${vars.join(", ")}) {
+  viewer {
+    ${Array.from({ length: accountCount }, (_, i) => `a${i}: accounts(filter: { accountTag: $a${i} }) { settings { ${accountBlock} } }`).join("\n    ")}
+    ${Array.from({ length: zoneCount }, (_, i) => `z${i}: zones(filter: { zoneTag: $z${i} }) { settings { ${zoneBlock} } }`).join("\n    ")}
+  }
+}`;
+}
+
+export type DatasetSettings = { enabled: boolean; notOlderThan: number | null; maxDuration: number | null };
+export interface SettingsData {
+  viewer: Record<string, { settings: Record<string, DatasetSettings | null> }[]>;
+}
