@@ -89,7 +89,7 @@ describe("R14 R15 usage table", () => {
     expect(table.rows).toHaveLength(ACCOUNT_METRICS.length);
     expect(row(table.rows, "workers", "requests")).toMatchObject({
       productLabel: "Workers",
-      label: "Peticiones",
+      label: "Peticiones de Worker",
       usage: 1000,
       limit: 100000,
       percent: 1,

@@ -214,6 +214,26 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
     expect(storage.usage).toBe(1000);
   });
 
+  const largestRow = (body: { accounts: { rows: { metric: string; note: string | null; usage: number }[] }[] }) =>
+    body.accounts[0]!.rows.find((r) => r.metric === "largest_db_bytes")!;
+
+  it("P8 names the largest database of the day whose size is shown", async () => {
+    const row = largestRow(await json(await get(appWith(fakeCloudflare()), "/api/usage")));
+    expect(row).toMatchObject({ usage: 1000, note: "Base: db-1" });
+  });
+
+  it("P8 does not name a database that no longer appears on the day shown", async () => {
+    const usage = {
+      viewer: {
+        accounts: [{ workers: [], d1: [], r2Storage: [], r2Ops: [], d1Storage: [{ max: { databaseSizeBytes: 1000 }, dimensions: { date: "2026-10-20", databaseId: "db-gone" } }] }],
+      },
+    };
+    const fake = fakeCloudflare({ graphql: () => Response.json({ data: usage }) });
+    const row = largestRow(await json(await get(appWith(fake), "/api/usage")));
+    expect(row.usage).toBe(0);
+    expect(row.note).toBeNull();
+  });
+
   it("R34 reads the current day from the API and stores nothing", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake), "/api/usage");

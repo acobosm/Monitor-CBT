@@ -99,8 +99,9 @@ export function apiRoutes(deps: ApiDeps = {}) {
         const live = result.value;
         Object.assign(history, live.days);
         history[today] = partialDayMetrics(live.days[today] ?? []);
-        const largestDay = Object.keys(live.largestD1).filter((d) => live.largestD1[d]).sort().at(-1);
-        extras = { unclassifiedR2: live.unclassifiedR2, largestD1Id: largestDay ? live.largestD1[largestDay] : null };
+        // The base named is the one of the day whose size is shown: a database deleted since then is not named.
+        const shownDay = Object.keys(history).filter((d) => history[d]?.some((m) => m.metric === "largest_db_bytes")).sort().at(-1);
+        extras = { unclassifiedR2: live.unclassifiedR2, largestD1Id: shownDay ? live.largestD1[shownDay] : null };
       } else {
         failed = true;
         rejected ||= tokenRejected(result.reason);

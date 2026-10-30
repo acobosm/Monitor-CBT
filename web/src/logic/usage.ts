@@ -157,7 +157,7 @@ export interface UsageTable {
 
 const PRODUCT_LABELS: Record<Product, string> = { workers: "Workers", d1: "D1", r2: "R2" };
 const METRIC_LABELS: Record<string, string> = {
-  "workers:requests": "Peticiones",
+  "workers:requests": "Peticiones de Worker",
   "d1:rows_read": "Filas leídas",
   "d1:rows_written": "Filas escritas",
   "d1:storage_bytes": "Almacenamiento",
