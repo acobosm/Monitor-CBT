@@ -19,12 +19,12 @@
   "triggers": {
     "crons": ["0 1 * * *"]
   },
-  // Not secrets. Empty until Access is configured (T12): while empty, every /api/* request is denied (R3).
-  // ACCESS_TEAM_DOMAIN looks like https://<team>.cloudflareaccess.com; ACCESS_AUD is the application AUD tag.
+  // Not secrets. While ACCESS_TEAM_DOMAIN or ACCESS_AUD is empty, every /api/* request is denied (R3).
+  // ACCESS_AUD is the AUD tag of the Access application of this Worker.
   // LOCAL_ACCESS_BYPASS is "false" in production; only web/.dev.vars may set it to "true" (R4).
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": "",
+    "ACCESS_TEAM_DOMAIN": "https://winter-unit-dba9.cloudflareaccess.com",
+    "ACCESS_AUD": "bf0abbe6cfeadbc215c84b9a878f6f69c0706e997c33c7b8470fd4dba9e07893",
     "LOCAL_ACCESS_BYPASS": "false"
   },
   // Deploy fails if these are not set as Worker secrets.
@@ -35,15 +35,13 @@
     {
       "binding": "AUDIT_DB",
       "database_name": "monitor-cbt-audit-db",
-      // Placeholder for local development; the real ID is set when the database is created (T12).
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "10f769ba-117e-4e33-82cb-6cb341f12a70",
       "migrations_dir": "migrations/audit"
     },
     {
       "binding": "STATS_DB",
       "database_name": "monitor-cbt-statistics-db",
-      // Placeholder for local development; the real ID is set when the database is created (T12).
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "81e82feb-90ef-4e07-b72e-6ea22c0a9bbc",
       "migrations_dir": "migrations/statistics"
     }
   ]
