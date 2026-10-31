@@ -31,11 +31,11 @@ describe("R22 R34 isPartialDay", () => {
 describe("R31 missingDays", () => {
   const now = new Date("2026-10-30T01:00:00Z");
 
-  it("returns the 30 complete days when nothing is stored, oldest first, today excluded", () => {
+  it("returns the 29 complete days when nothing is stored, oldest first, today excluded", () => {
     const days = missingDays([], now);
-    expect(days).toHaveLength(30);
-    expect(days[0]).toBe("2026-09-30");
-    expect(days[29]).toBe("2026-10-29");
+    expect(days).toHaveLength(29);
+    expect(days[0]).toBe("2026-10-01");
+    expect(days[28]).toBe("2026-10-29");
     expect(days).not.toContain("2026-10-30");
   });
 
@@ -92,6 +92,6 @@ describe("R31 P9 gapDays", () => {
   });
 
   it("treats the whole window as recoverable when history started earlier", () => {
-    expect(gapDays([], "2026-01-01", now)).toHaveLength(30);
+    expect(gapDays([], "2026-01-01", now)).toHaveLength(29);
   });
 });

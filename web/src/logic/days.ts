@@ -3,8 +3,8 @@
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 
-/** Days back the daily task fills in (P6: zone datasets keep 31 days from query time). */
-export const BACKFILL_DAYS = 30;
+/** Days back the daily task fills in (P6: zone datasets keep 31 days; P11: Worker requests get coarse at about 30). */
+export const BACKFILL_DAYS = 29;
 /** IPs older than this many calendar months are deleted (R32). */
 export const IP_RETENTION_MONTHS = 13;
 /** Ecuador (ECT) is always UTC−05:00, with no daylight saving time. */

@@ -28,5 +28,7 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]
 - [~] **T12. Production.** Enable Access on the `workers.dev` URL (check one-click and one-time PIN on Free, 24 h session), owner creates the GoDaddy 301 unmasked redirect `monitor.cobtec.net` → workers.dev URL (no other DNS change), create remote D1 databases, secrets, remote migrations, deploy; all with user authorization; owner tests the sign-in. (R40, Definition of Done)
   In progress 2026-10-30: deployed to https://monitor-cbt.acobos.workers.dev. Deploys use `monitor-cbt-deploy`, a token limited to the COBTEC account (Workers Scripts Edit, D1 Edit, expires 2026-11-30) instead of `wrangler login`, which reaches the client accounts. Before Access, `/api/*` answered 403 in production (R3). Access: Worker tab "Access", scope "All traffic", own policy `owner-only` (Allow, Emails = owner, 24 hours), because the pre-configured policies allow the whole account or email domain. One-time PIN works on the Free plan. Owner checked: sign-in, no PIN for an unauthorized email, "Salir" asks for the email again. GoDaddy forwarding saved; name servers and MX unchanged. Pending: the redirect resolving, and the first daily run at 01:00 UTC.
 
+- [x] **T12b. Worker request sampling.** Own 8-day range for Worker requests on the dashboard, recovery limited to 29 days back. (R31, R43, P11)
+
 ## Closing
 - [ ] **T13. Documentation.** Update the documents affected by this spec, including real usage figures. (Definition of Done)

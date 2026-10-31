@@ -2,12 +2,13 @@
 
 /**
  * Plan usage of one account for a range of UTC days (at most 32 days per query). One subrequest per
- * account covers the whole backfill window plus today.
+ * account covers the whole backfill window plus today. Worker requests have their own start: a range
+ * reaching a day about 30 days old is sampled coarsely as a whole (P11).
  */
-export const ACCOUNT_USAGE_QUERY = `query AccountUsage($tag: string!, $from: Date!, $to: Date!) {
+export const ACCOUNT_USAGE_QUERY = `query AccountUsage($tag: string!, $from: Date!, $workersFrom: Date!, $to: Date!) {
   viewer {
     accounts(filter: { accountTag: $tag }) {
-      workers: workersInvocationsAdaptive(limit: 10000, filter: { date_geq: $from, date_leq: $to }) {
+      workers: workersInvocationsAdaptive(limit: 10000, filter: { date_geq: $workersFrom, date_leq: $to }) {
         sum { requests }
         dimensions { date }
       }

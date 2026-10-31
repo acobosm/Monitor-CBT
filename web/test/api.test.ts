@@ -248,6 +248,12 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
     expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-09-25", to: "2026-10-03" });
   });
 
+  it("R43 reads Worker requests from the last 8 days, also on the 31st, when the month reaches 30 days back", async () => {
+    const fake = fakeCloudflare();
+    await get(appWith(fake, () => new Date("2026-10-31T16:00:00Z")), "/api/usage");
+    expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-10-01", workersFrom: "2026-10-23", to: "2026-10-31" });
+  });
+
   it("R34 reuses the read for 60 seconds, then reads again", async () => {
     const fake = fakeCloudflare();
     let now = NOW;

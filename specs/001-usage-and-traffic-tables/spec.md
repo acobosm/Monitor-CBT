@@ -18,7 +18,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 5. Traffic per site: requests, visits, page views, bytes, countries, top 20 IPs by traffic and top 20
    IPs by security events.
 6. Remaining days of the token, with a warning.
-7. Daily task into D1 (history starts on the first run), recovery of days that fail afterwards (up to 30 days back) and deletion of IPs older than 13 months.
+7. Daily task into D1 (history starts on the first run), recovery of days that fail afterwards (up to 29 days back) and deletion of IPs older than 13 months.
 8. Audit of data views in `monitor-cbt-audit-db`.
 9. UI: home page with the module selector "Cloudflare - Consumo y Tráfico" and a dashboard made of
    tables, with the footer "Powered by CBT · © 2026".
@@ -76,12 +76,13 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R28. WHEN the daily task runs (01:00 UTC, 20:00 ECT; P3), the system SHALL fetch the previous UTC day for every account and zone and store it in `monitor-cbt-statistics-db`.
 - R29. The system SHALL store only the top 20 IPs per site, per day and per kind (traffic, security).
 - R30. IF a day is processed twice, THEN the system SHALL replace that day's rows without duplicating them.
-- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 30 days that come after the first stored day, and fill them in; days before the first stored day are not fetched. (P6, P9)
+- R31. WHEN the daily task runs, the system SHALL detect missing days within the last 29 days that come after the first stored day, and fill them in; days before the first stored day are not fetched. (P6, P9, P11)
 - R32. WHEN the daily task runs, the system SHALL delete IPs older than 13 months.
 - R33. IF reading one account or zone fails, THEN the system SHALL continue with the others and log the error; that day stays missing for the backfill.
 - R34. WHEN the dashboard opens, the system SHALL read the current day from the API without storing it, because it is partial.
 - R35. IF the API does not respond when the dashboard opens, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Se muestra el historial guardado hasta el <fecha>."
 - R42. IF the API does not respond and no history is stored, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Aún no hay historial guardado." (P10)
+- R43. WHEN the dashboard opens, the system SHALL read Worker requests only from the last 8 days, so that the range never reaches the days Cloudflare reports with coarse sampling. (P11)
 
 ### UI and discovery
 - R36. The system SHALL show on the home page a module selector with a single option, "Cloudflare - Consumo y Tráfico", which leads to the dashboard.
@@ -93,7 +94,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 
 ## Definition of Done
 <!-- UNIVERSAL -->
-- Automated tests for every requirement that can be tested automatically (list: R1–R39, R41, R42; R40 is checked by hand in production).
+- Automated tests for every requirement that can be tested automatically (list: R1–R39, R41–R43; R40 is checked by hand in production).
 - User testing locally for what touches the interface.
 - Documentation affected by this spec updated.
 - The token creation guide is written, and the owner created the new token `monitor-cbt-analytics-readonly` with it.
@@ -133,3 +134,6 @@ history stored in D1 and a warning about the analytics token's expiration.
 - **P10.** (From T10.) R35 names the date of the last stored day, but on the first day there is none, because the past is not copied (P9). What is displayed?
   A (recommended): "No pudimos leer los datos recientes de Cloudflare. Aún no hay historial guardado." B: only the first sentence.
   **Answer:** A (2026-10-30). Applied in R42.
+- **P11.** (From T12.) On 2026-10-31 the dashboard showed 0 Worker requests for COBTEC while the real figure was 11. A `workersInvocationsAdaptive` query whose range includes a day about 30 days old (checked: 2026-10-01 at 16:42 UTC on 2026-10-31; 2026-10-02 is fine) is sampled much more coarsely as a whole (interval 11 to 48 instead of 1 to 5), and small days vanish or round to tens. On the dashboard this happens on the 31st of 31-day months, when the month's first day reaches that age. D1 and R2 gave identical figures with and without that day. What is done?
+  A (recommended): read Worker requests with their own range of the last 8 days on the dashboard (the table only uses today and the 7-day peak), and limit recovery to 29 days back, so the daily task never reaches that age. This changes the answer to P6. B: split the query into short ranges. C: leave it and mark the figure as approximate.
+  **Answer:** A (2026-10-31; the owner asked to apply the fix). Applied in R31 and R43.

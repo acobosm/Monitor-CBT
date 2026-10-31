@@ -128,7 +128,7 @@ describe("R31 recovering missing days after the first stored day", () => {
     expect(await trafficDays(soma.id)).toEqual(["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27", YESTERDAY]);
     expect(await trafficDays(boraei.id)).toEqual([YESTERDAY]);
     const cobtecCall = calls.find((c) => c.op === "AccountUsage" && c.variables.tag === cobtec.accountId);
-    expect(cobtecCall?.variables).toMatchObject({ from: "2026-10-25", to: YESTERDAY });
+    expect(cobtecCall?.variables).toMatchObject({ from: "2026-10-25", workersFrom: "2026-10-25", to: YESTERDAY });
     expect(await count(`SELECT COUNT(DISTINCT day) AS n FROM usage_daily WHERE account_id = '${cobtec.accountId}'`)).toBe(5);
   });
 

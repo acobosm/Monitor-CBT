@@ -71,7 +71,8 @@ export function apiRoutes(deps: ApiDeps = {}) {
     const monthStart = `${today.slice(0, 7)}-01`;
     const weekBack = shiftDay(today, -8);
     // One query per account covers the month and the last week: figures are complete from the first day,
-    // when D1 has no history yet (P9). Nothing read here is stored (R34).
+    // when D1 has no history yet (P9). Nothing read here is stored (R34). Worker requests are a daily metric
+    // (today and 7-day peak), so they only need the last week, which keeps them precise (R43).
     const fromDay = weekBack < monthStart ? weekBack : monthStart;
     const stored = await readUsage(c.env.STATS_DB, fromDay);
 
@@ -81,7 +82,7 @@ export function apiRoutes(deps: ApiDeps = {}) {
           const data = await graphql<AccountUsageData>(
             requireToken(c.env),
             ACCOUNT_USAGE_QUERY,
-            { tag: account.accountId, from: fromDay, to: today },
+            { tag: account.accountId, from: fromDay, workersFrom: weekBack, to: today },
             fetchFn,
           );
           return parseAccountUsage(data, dayRange(fromDay, today));

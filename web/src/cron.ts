@@ -106,7 +106,7 @@ export async function runDailyTask(
     const gaps = gapDays(stored.accounts.days[id] ?? [], stored.accounts.first[id] ?? null, now);
     const days = [...new Set([...gaps, yesterday])].sort();
     try {
-      const data = await graphql<AccountUsageData>(token, ACCOUNT_USAGE_QUERY, { tag: id, from: days[0], to: yesterday }, fetchFn);
+      const data = await graphql<AccountUsageData>(token, ACCOUNT_USAGE_QUERY, { tag: id, from: days[0], workersFrom: days[0], to: yesterday }, fetchFn);
       const parsed = parseAccountUsage(data, days);
       await saveAccountDays(db, id, parsed.days, now);
       summary.accountsStored.push(account.id);
