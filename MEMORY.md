@@ -6,8 +6,8 @@ _Last updated: 2026-10-30_
 ## Where we are
 - Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: spec 001 in progress; T1–T11 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic, daily task, API, table UI).
-- Last confirmed commit: `e5decbd` (T11, 2026-10-30; on `001-usage-and-traffic-tables`; `main` at `415d550`).
+- Project phase: spec 001 in progress; T1–T11 done (token, skeleton, discovery, day and token logic, Access and audit, statistics database, plan usage, traffic, daily task, API, table UI); T12 deployed, two checks left. Production: https://monitor-cbt.acobos.workers.dev behind Access.
+- Last confirmed commit: `a80a56d` (T12 config, 2026-10-30; on `001-usage-and-traffic-tables`; `main` at `415d550`).
 - Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
 
 ## Next step
