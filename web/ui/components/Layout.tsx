@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
+import logoInverse from "../assets/cbt_logo_inverse.svg";
+import logo from "../assets/cbt_logo.svg";
 import { navigate, type Route } from "../route";
+import { PageCircuit, SideCircuit } from "./Circuit";
+import { ThemeButton } from "./ThemeButton";
 
 export const FOOTER_TEXT = "Powered by CBT · © 2026";
 
@@ -24,8 +28,13 @@ function MenuLink({ href, current, children }: { href: string; current: boolean;
 
 export function Layout({ route, notice, children }: { route: Route; notice: ReactNode; children: ReactNode }) {
   return (
-    <>
-      <header>
+    <div className="app">
+      <PageCircuit />
+      <aside className="side">
+        <SideCircuit />
+        {/* R1: the CSS shows the version that matches the theme. */}
+        <img className="logo-light" src={logo} alt="CBT" />
+        <img className="logo-dark" src={logoInverse} alt="CBT" />
         <nav aria-label="Menú">
           <MenuLink href="/consumo" current={route.page === "usage"}>
             Consumo de planes
@@ -35,17 +44,22 @@ export function Layout({ route, notice, children }: { route: Route; notice: Reac
               {site.name}
             </MenuLink>
           ))}
+        </nav>
+        <div className="side-actions">
+          <ThemeButton />
           {/* R40: ends the Access session; it only exists behind Access, so it is checked in production. */}
-          <a className="logout" href="/cdn-cgi/access/logout">
+          <a className="button" href="/cdn-cgi/access/logout">
             Salir
           </a>
-        </nav>
-      </header>
-      <main>
-        {notice}
-        {children}
-      </main>
-      <Footer />
-    </>
+        </div>
+      </aside>
+      <div className="content">
+        <main>
+          {notice}
+          {children}
+        </main>
+        <Footer />
+      </div>
+    </div>
   );
 }

@@ -26,6 +26,8 @@ export default defineConfig(async () => {
     test: {
       include: ["test/**/*.test.{ts,tsx}"],
       setupFiles: ["./test/setup.ts"],
+      // Tests read the stylesheet's text (test/ui/design.test.tsx); by default Vitest empties CSS files.
+      css: true,
     },
   };
 });

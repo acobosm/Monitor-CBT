@@ -32,5 +32,5 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]
   Done 2026-10-31: 201 tests green (1 new), typecheck and build green. The corrected query was run against the real API for COBTEC, and after the deploy the owner saw 13 requests instead of the false 0 in production. D1 and R2 figures were identical with and without the old day on COBTEC and SOMA (BORAEI has no D1 or R2 data). Commit `a2acfcb`.
 
 ## Closing
-- [x] **T13. Documentation.** Update the documents affected by this spec, including real usage figures. (Definition of Done)
-  Done 2026-10-31: `SERVICES_AND_COSTS`, `ARCHITECTURE`, `DEVELOPMENT`, `DATA_MODEL`, `AGENTS` and `MEMORY` updated. Usage figures are a first measurement from a day in progress, not a typical day.
+- [✓] **T13. Documentation.** Update the documents affected by this spec, including real usage figures. (Definition of Done)
+  Done 2026-10-31: `SERVICES_AND_COSTS`, `ARCHITECTURE`, `DEVELOPMENT`, `DATA_MODEL`, `AGENTS` and `MEMORY` updated. Usage figures are a first measurement from a day in progress, not a typical day. Commit `a7da12c`.

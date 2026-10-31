@@ -4,15 +4,13 @@ _Last updated: 2026-10-31_
 <!-- UNIVERSAL: este archivo es una foto del estado actual, no una bitácora. Se reescribe al cerrar cada sesión y se mantiene corto (unas 30 líneas). La historia vive en git y en las specs. -->
 
 ## Where we are
-- Working branch: `001-usage-and-traffic-tables`. `main` = production.
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
-- Project phase: spec 001 complete (T1–T13, T12b included); only the merge is left. Production: https://monitor-cbt.acobos.workers.dev behind Access, reached through `monitor.cobtec.net`; deployed with `a2acfcb`.
-- Last confirmed commit: `a2acfcb` (T12b, 2026-10-31; on `001-usage-and-traffic-tables`; `main` at `415d550`).
-- Active spec: `specs/001-usage-and-traffic-tables/` (spec approved 2026-10-29; plan and tasks approved).
+- Working branch: `003-charts-and-design`. Spec 001 complete and merged. Production: https://monitor-cbt.acobos.workers.dev behind Access, reached through `monitor.cobtec.net`; deployed with `a2acfcb`.
+- Last confirmed commit: `a7da12c` (T13 of spec 001, 2026-10-31; `main` at the same commit).
+- Active spec: `specs/003-charts-and-design/` (spec and plan approved 2026-10-31). Spec 002 (export) comes after it, by the owner's choice.
 
 ## Next step
-1. The owner merges `001-usage-and-traffic-tables` into `main`.
-2. Choose the next spec (charts are recorded as spec 003; check the numbering and order with the owner).
+1. Continue spec 003 from the first unfinished task in its `tasks.md`.
 
 ## Known pending tasks
 - Analytics token `monitor-cbt-analytics-readonly` valid 2026-10-29 to 2026-12-31 23:59 ECT (owner's common date for all tokens): renew from 2026-12-01 following `docs/SERVICES_AND_COSTS.md`. When creating tokens, the TTL start date must be today (one was created with start = end day).
@@ -25,5 +23,5 @@ _Last updated: 2026-10-31_
 - Final UI: add an (i) with a hover message explaining "Peticiones de Worker" (Worker runs, counted against the limit) versus "Peticiones al sitio" (all visitor requests to the zone) (asked 2026-10-30).
 - Final UI: on a phone-width window, wide tables scroll sideways to reach the last column (owner accepts it for now).
 - SOMA visits differ slightly from SOMA's own monitor (+1 on 2026-10-25, +2 on 2026-10-28; other days equal). Not explained yet: check whether that monitor filters by host ("Visitas de producción").
-- Design: the CBT design system and the "CBT Monitoreo" prototype are a visual reference for spec 003; the landing animation conflicts with the design system's "no animation" rule.
+- Design: the "CBT Monitoreo" prototype rules over the design system where they differ, including the landing animation (spec 003, P1). Artifacts: prototype https://claude.ai/artifact/R9vTbc1smDZGtDHLPL1QD9 , design system https://claude.ai/artifact/Po6aoP9yPy4ArpRrFmxDSq .
 - Future spec "Seal of Guarantee": anchor daily hashes of statistics, audit and client reports on a blockchain (Rust or Solidity). Data stays private in D1; only hashes go on-chain. It proves the data was not altered after sealing, not that it is correct. Compare OpenTimestamps, EAS, Solana, Soroban and ICP. **Verify ICP first**: canisters in Rust, reverse gas model with cycles; check whether cycles must be bought (cost per month for this load) or can be obtained free, and current developer credits, in official sources.
