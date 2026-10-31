@@ -42,7 +42,7 @@
 | UI and API | Yes | `npm run dev` |
 | Real Cloudflare API reads | Yes | With the token in `.dev.vars` |
 | D1 databases | Yes | Local databases simulated by wrangler |
-| Daily task | Yes | Triggered by hand with wrangler's scheduled-test mode, without waiting for 19:00 ECT |
+| Daily task | Yes | Triggered by hand with wrangler's scheduled-test mode, without waiting for 20:00 ECT |
 | Cloudflare Access sign-in | **No** | Locally the bypass flag is used. JWT validation is covered by automated tests with dummy JWTs. The real sign-in is tested in production after the first deploy. |
 | Automated tests | Yes | `npm test`, never calling Cloudflare (fixtures) |
 
@@ -54,7 +54,7 @@ Local and production only (no staging).
 | App / Worker / Service | Worker `monitor-cbt` (COBTEC account) |
 | Domain | `monitor-cbt.<subdomain>.workers.dev` protected by Access; `monitor.cobtec.net` is a GoDaddy 301 redirect (unmasked) to it; preview URLs disabled |
 | Databases | `monitor-cbt-statistics-db`, `monitor-cbt-audit-db` |
-| Deploy command | From `web/`: remote migrations of each database first, then `npm run deploy`. Always with user authorization. |
+| Deploy command | From `web/`: remote migrations of each database first, then `npm run deploy`, with the `monitor-cbt-deploy` token as `CLOUDFLARE_API_TOKEN` in a normal terminal. Always with user authorization. |
 
 - Order: migrations before code, so new code never meets a database without its tables.
 - `cobtec.net` DNS stays at GoDaddy (the family's Outlook.com addresses depend on it). Never use masked
@@ -87,17 +87,18 @@ A new email must be added in **both** places (Access policy and `ALLOWED_EMAILS`
   with dummy values (a test checks it), and applies the audit migrations to a local D1 in `test/setup.ts`.
   Access JWTs in tests are signed with a key generated on the fly (`test/helpers/access-jwt.ts`); Cloudflare
   is never called.
-- **Access settings:** `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are `vars` in `wrangler.jsonc`, empty until T12.
-  While empty, every `/api/*` request gets 403 (fail closed, R3), also in production.
+- **Access settings:** `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are `vars` in `wrangler.jsonc`.
+  If either is empty, every `/api/*` request gets 403 (fail closed, R3), also in production.
 - **Local bypass:** `LOCAL_ACCESS_BYPASS` is a `var` with value `"false"`; only `web/.dev.vars` sets it to
   `"true"`, and it only applies to requests to `localhost` (R4). Local identity: `local@localhost`.
 - **Required secrets:** `secrets.required` in `wrangler.jsonc` lists `CLOUDFLARE_ANALYTICS_TOKEN` and
   `ALLOWED_EMAILS`: deploy fails if they are not set, and `npm run dev` warns if `.dev.vars` lacks them.
   With `secrets` declared, wrangler only loads from `.dev.vars` the names declared as secrets or vars.
-- **D1 placeholder IDs:** `AUDIT_DB` uses `00000000-0000-0000-0000-000000000000` and `STATS_DB`
-  `00000000-0000-0000-0000-000000000001` until the remote databases are created in T12; local development and
-  tests do not need the real IDs. Tests apply both migration folders in `test/setup.ts` and empty the
+- **D1 IDs:** `wrangler.jsonc` holds the real IDs of the production databases; local development and
+  tests do not touch them. Tests apply both migration folders in `test/setup.ts` and empty the
   statistics tables before each test.
+- **Worker request sampling:** a `workersInvocationsAdaptive` range that includes a day about 30 days old is sampled
+  coarsely as a whole, so the usage query has its own `$workersFrom` (P11, `docs/DATA_MODEL.md`).
 - **Types:** `npm run cf-typegen` runs `wrangler types --strict-vars=false` so vars are typed as `string`.
 - **Two tsconfigs:** `tsconfig.json` (Worker, tests, configs, Workers runtime types) and
   `tsconfig.ui.json` (UI, DOM types); browser and Workers types conflict in one project.

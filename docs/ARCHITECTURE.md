@@ -6,7 +6,7 @@ monitor-cbt is **a single Cloudflare Worker** (`monitor-cbt`) in the COBTEC acco
 1. **Serves the UI** (React): a home page with a module selector (today only "Cloudflare - Consumo y Tráfico")
    that leads to each monitoring dashboard. Further API-based monitoring modules can be added later.
 2. **Exposes its own API** (`/api/*`), which only answers authenticated users.
-3. **Runs a daily scheduled task** that, shortly after 00:00 UTC (19:00 ECT), copies the previous
+3. **Runs a daily scheduled task** that, at 01:00 UTC (20:00 ECT, one hour after the day closes), copies the previous
    day's statistics into the D1 database `monitor-cbt-statistics-db`. Data views and exports are
    recorded in a separate D1 database, `monitor-cbt-audit-db`.
 
@@ -47,8 +47,9 @@ flowchart LR
    the module selector → choose the module → dashboard. On every API call the Worker validates the
    JWT and the email allowlist, and records the view in the audit log.
 2. **View the dashboard:** the UI requests data from `/api` → the Worker reads the history from D1,
-   completes recent data (today, partial) from the GraphQL API, and adds the token's remaining days.
-3. **Daily task:** shortly after 00:00 UTC (19:00 ECT) the Worker requests the previous day from
+   completes recent data from the GraphQL API (the current month and the last week, today being partial; nothing of it
+   is stored), and adds the token's remaining days.
+3. **Daily task:** at 01:00 UTC (20:00 ECT) the Worker requests the previous day from
    GraphQL for each account and zone → stores it in D1 → deletes IPs older than 13 months. If a day
    fails, the next run fills in the missing days while the API still retains them.
 4. **Export:** the UI builds the Excel or PDF file in the browser from the data already on screen,
@@ -85,9 +86,13 @@ with the app, so the browser never calls Google Fonts.
 | 2026-10-28 | Double barrier: Access JWT + email allowlist in the Worker | A mistake in the Access policy does not open the dashboard |
 | 2026-10-28 | Access session of 24 hours | Occasional use; sensitive data on screen |
 | 2026-10-29 | Published at the `workers.dev` URL with Access (one-click), `monitor.cobtec.net` redirects there from GoDaddy; `cobtec.net` DNS stays at GoDaddy | The family's Outlook.com personalized addresses (@cobtec.net) depend on GoDaddy DNS and cannot be re-added if lost (feature retired 2023-11-30). Custom Domains need the zone in Cloudflare. Own tool, so the URL change is acceptable |
-| 2026-10-28 | Daily history in D1 | The API retains only a few days |
+| 2026-10-28 | Daily history in D1 | The API retains only 31 days of traffic and 90 of usage |
 | 2026-10-28 | A statistics "day" = Cloudflare's UTC day (19:00 to 19:00 ECT) | Matches the daily limit reset |
 | 2026-10-28 | Stored IPs: top N per day, deleted after 13 months | Security visibility with bounded personal data |
 | 2026-10-28 | Audit in its own D1 database (`monitor-cbt-audit-db`), separate from statistics | Restoring statistics (Time Travel) never erases audit records; separate size limits and exports |
 | 2026-10-28 | IBM Plex fonts bundled with the app | No calls to Google |
 | 2026-10-28 | New, project-specific read-only token, expiration of 1 year or less | Independent from the SOMA usage panel |
+| 2026-10-30 | 60-second cache of live reads in the Worker's memory | The Cache API is not available for Workers fronted by Access |
+| 2026-10-30 | Deploys with `monitor-cbt-deploy`, a token limited to the COBTEC account, instead of `wrangler login` | A login session also reaches the client accounts |
+| 2026-10-30 | Own Access policy `owner-only` (Allow, owner's email, 24 hours) | The pre-configured policies allow the whole account or email domain |
+| 2026-10-31 | Worker requests read from the last 8 days on the dashboard; recovery up to 29 days back | A range reaching a day about 30 days old is sampled coarsely and showed a false 0 (P11) |

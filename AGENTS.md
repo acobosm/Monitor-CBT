@@ -10,7 +10,7 @@ token that never reaches the browser. A daily scheduled task stores snapshots in
 API retains. Access is restricted by email one-time PIN (Cloudflare Access). For now only the owner
 uses it; clients receive Excel reports on request.
 - Code lives in `web/`; all `npm` and `npx wrangler` commands run from `web/`. Documentation (`docs/`, `specs/`) lives at the repository root.
-- Production: the Worker's `workers.dev` URL protected by Access; https://monitor.cobtec.net is a GoDaddy redirect to it (not created yet). `cobtec.net` DNS stays at GoDaddy (family Outlook.com email). No staging environment: local and production only.
+- Production: the Worker's `workers.dev` URL protected by Access; https://monitor.cobtec.net is a GoDaddy redirect to it. `cobtec.net` DNS stays at GoDaddy (family Outlook.com email). No staging environment: local and production only.
 
 | Site | Account | Account ID | Zone |
 |---|---|---|---|
@@ -34,7 +34,7 @@ uses it; clients receive Excel reports on request.
 - `npm test`: Vitest.
 - `npm run build`: build the UI and the Worker (removes the `.dev.vars` copy from `dist/`).
 - `npm run cf-typegen`: regenerate `worker-configuration.d.ts`.
-- `npm run deploy`: deploy to production (only with user authorization; first run in T12).
+- `npm run deploy`: deploy to production (only with user authorization).
 
 ## Non-negotiable rules (details in docs/constitution.md)
 <!-- UNIVERSAL: no modificar sin que el usuario lo pida. -->

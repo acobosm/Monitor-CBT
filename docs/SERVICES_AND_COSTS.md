@@ -10,22 +10,23 @@ Inventory of every account and service the project depends on. Limits must be ch
 | GoDaddy | COBTEC (owner) | Owner | Registrar and DNS of `cobtec.net` (expires 2027-01-28). DNS stays at GoDaddy. Hosts the 301 redirect `monitor.cobtec.net` → workers.dev URL. |
 | Outlook.com (Microsoft) | Owner's personal account (Microsoft 365 Family) | Owner and family | Personalized addresses @cobtec.net for the family (MX `…pamx1.hotmail.com`, SPF, `autodiscover`, `_outlook`, `_domainconnect` at GoDaddy). The feature was retired for new setups on 2023-11-30 and an address cannot be re-added once removed; it is tied to GoDaddy DNS. Do not move or edit those records. |
 | GitHub and GitLab | Owner | Owner | Private repositories: `ghp` = github.com/acobosm/Monitor-CBT, `glp` = gitlab.com/acobosm1/cbt-development/monitor-cbt. Pushed with personal tokens (with expiration) kept in memory 8 h by the git credential cache. |
-| Bitwarden | Owner | Owner | Stores the analytics token. |
+| Bitwarden | Owner | Owner | Stores the analytics and deploy tokens. |
 
 ## Plans, limits and current usage
+"Current usage" is what the monitor's own COBTEC account shows on the dashboard: a first measurement taken on 2026-10-31 with the day in progress, not a typical day.
+
 | Service | Plan | Relevant limits (checked on: date) | Current usage | Monthly cost |
 |---|---|---|---|---|
-| Workers | Free | 100,000 requests/day (reset 00:00 UTC); 10 ms CPU per invocation, cron included; 50 subrequests per invocation; 5 cron triggers per account (2026-10-28, rechecked 2026-10-29) | Pending (spec 001) | $0 |
-| D1 | Free | 5 M rows read/day; 100,000 rows written/day (reset 00:00 UTC); 5 GB total; 500 MB per database; 10 databases; Time Travel 7 days; 50 queries per invocation, a `batch()` counts as one; 100 bound parameters per query (2026-10-28, rechecked 2026-10-29) | Pending (spec 001) | $0 |
-| R2 | Free | 10 GB-month (average of the daily peak); 1 M Class A ops/month; 10 M Class B ops/month; deletes are free. Not used by this app; measured in the monitored accounts. Class lists copied into `web/src/logic/usage.ts` (2026-10-28, rechecked 2026-10-29) | Not used | $0 |
-| GraphQL Analytics API | Included | 300 queries per 5 minutes; adaptive datasets keep at least 31 days on every plan; up to 10 zones per query (2026-10-28) | Pending (spec 001) | $0 |
-| Zero Trust (Access) | Free | 50 users; sign-in logs kept up to 24 hours. One-time PIN and one-click Access on `workers.dev` availability on Free not stated in the docs: verify in the dashboard (2026-10-28) | 1 user | $0 |
+| Workers | Free | 100,000 requests/day (reset 00:00 UTC); 10 ms CPU per invocation, cron included; 50 subrequests per invocation; 5 cron triggers per account (2026-10-28, rechecked 2026-10-29) | 13 requests/day | $0 |
+| D1 | Free | 5 M rows read/day; 100,000 rows written/day (reset 00:00 UTC); 5 GB total; 500 MB per database; 10 databases; Time Travel 7 days; 50 queries per invocation, a `batch()` counts as one; 100 bound parameters per query (2026-10-28, rechecked 2026-10-29) | 339 rows read/day; 515 rows written/day; 106.5 KB in 2 databases | $0 |
+| R2 | Free | 10 GB-month (average of the daily peak); 1 M Class A ops/month; 10 M Class B ops/month; deletes are free. Not used by this app; measured in the monitored accounts. Class lists copied into `web/src/logic/usage.ts` (2026-10-28, rechecked 2026-10-29) | Not used by this app | $0 |
+| GraphQL Analytics API | Included | 300 queries per 5 minutes; adaptive datasets keep at least 31 days on every plan; up to 10 zones per query (2026-10-28) | About 10 queries per daily run, plus 3 per dashboard read of usage (calculated from the code) | $0 |
+| Zero Trust (Access) | Free | 50 users; sign-in logs kept up to 24 hours. One-time PIN and Access on `workers.dev` work on Free (checked in production, 2026-10-30) | 1 user | $0 |
 
 Sources: developers.cloudflare.com (workers/platform/limits, d1/platform/pricing, d1/platform/limits,
 r2/pricing, analytics/graphql-api/limits) and cloudflare.com/plans/sase-zero-trust.
 
-Risks noted for spec 001: the 10 ms CPU limit for the daily cron (split it into several runs if
-needed); one-time PIN availability on Access Free.
+Risk noted for spec 001: the 10 ms CPU limit for the daily cron (split it into several runs if needed).
 
 ## Credentials
 <!-- UNIVERSAL: nunca escribir aquí secretos, contraseñas ni tokens; solo dónde se guardan y quién puede rotarlos. -->
@@ -33,7 +34,8 @@ needed); one-time PIN availability on Access Free.
 |---|---|---|
 | `CLOUDFLARE_ANALYTICS_TOKEN` | Worker secret, `web/.dev.vars`, Bitwarden | Expiration of 6 months recommended, 1 year maximum. Create the new token, load it with `npx wrangler secret put`, revoke the old one, check the remaining days in the dashboard. |
 | `ALLOWED_EMAILS` | Worker secret, `web/.dev.vars` | When people are added or removed (together with the Access policy). |
-| wrangler session (`wrangler login`) | Only on the owner's computer, temporary | At the end of every work session: `npx wrangler logout`. |
+| `monitor-cbt-deploy` (COBTEC account only: Workers Scripts Edit, D1 Edit) | Bitwarden; used as the `CLOUDFLARE_API_TOKEN` variable in a normal terminal, never saved in the repo | Expires 2026-11-30: renew or recreate it for later deploys. |
+| wrangler session (`wrangler login`) | Not used for deploys, because it also reaches the client accounts. If ever used: only on the owner's computer, temporary | At the end of every work session: `npx wrangler logout`. |
 
 Not secrets (kept in `wrangler.jsonc`): the Access team domain and the Access application "AUD" tag,
 which the Worker needs to validate the JWT.
@@ -69,7 +71,7 @@ account. Never use a different or broader token to work around it.
 ### 3. Store
 - Bitwarden item `monitor-cbt-analytics-readonly`: the value, expiration date, permissions, accounts and zones.
 - `web/.dev.vars` (listed in `.gitignore`): `CLOUDFLARE_ANALYTICS_TOKEN=<value>`.
-- Worker secret (in T12, with authorization): `npx wrangler secret put CLOUDFLARE_ANALYTICS_TOKEN`
+- Worker secret (with authorization): `npx wrangler secret put CLOUDFLARE_ANALYTICS_TOKEN`
   from `web/`; it asks for the value without echoing it.
 
 ### 4. Verify without exposing it

@@ -114,7 +114,8 @@ Key: (scope, tag, dataset). Refreshed on every daily run.
 | Email in the audit log (`audit_event.email`) | **Yes, personal data** | No automatic deletion for now | Reviewed as usage grows |
 
 Size estimate (after T3, 3 sites): about 300 rows per day (usage 27, traffic 3, countries ~150,
-IPs up to 120), roughly 30 KB per day or 11 MB per year; to be checked with real data after T12. D1 Free plan limit: 500 MB per
+IPs up to 120), roughly 30 KB per day or 11 MB per year. First real data (2026-10-31): 515 rows written in the day, against the
+100,000 limit, and 106.5 KB across both databases; one day is too little to replace the estimate. D1 Free plan limit: 500 MB per
 database (checked on 2026-10-28 at developers.cloudflare.com/d1/platform/limits).
 
 Pending legal question (see `docs/LEGAL.md`): the legal basis for storing visitor IPs would be
