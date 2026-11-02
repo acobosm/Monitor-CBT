@@ -3,9 +3,10 @@ Spec: `spec.md` · Plan: `plan.md`
 Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]` user-tested and committed (with commit id).
 <!-- UNIVERSAL: tareas chicas, que se terminan, prueban y commitean en una sesión corta. Cada una indica los requisitos que cubre. Al terminar una tarea se agrega debajo una nota "Done <fecha>: …" con lo verificado y lo que cambió respecto al plan. -->
 
-- [x] **T1. Visual base.** Tokens, logos, themes and side menu. (R1–R7)
+- [✓] **T1. Visual base.** Tokens, logos, themes and side menu. (R1–R7) Commit 2acf497.
   Done 2026-10-31: typecheck and tests green; owner checked logo, menu, circuit background, themes, tables and notices locally. The day selector only had one stored day (30 Oct), so changing day is covered by tests but not yet seen by the owner. The owner's first attempt failed because of a stale local dev server, not this code.
-- [ ] **T2. Landing.** Dark landing with the node network and the module selector. (R8–R11)
+- [x] **T2. Landing.** Dark landing with the node network and the module selector. (R8–R11)
+  Done 2026-11-02: typecheck and tests green; owner checked the landing locally. Changes from the prototype at the owner's request: logo 260 px wide (the traced logo looked rough at 480 px) and the logo, text and button centered as a block in the left 70% of the screen. The button still leads to `/consumo`; it changes to `/panel` in T4, when that page exists. The owner's first look failed because the dev server kept a half-updated stylesheet; saving the file again fixed it.
 - [ ] **T3. Daily data.** Measure visits over a 29-day range; API with daily series, reading missing days from Cloudflare. (R35)
 - [ ] **T4. General panel.** `/panel`, summary and site cards. (R12–R16)
 - [ ] **T5. Usage cards.** Bars per account and the (i) messages. (R17–R25)

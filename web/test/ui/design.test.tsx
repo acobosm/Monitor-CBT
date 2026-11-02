@@ -1,8 +1,10 @@
 import { renderToStaticMarkup as html } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pageTraces, sideTraces } from "../../ui/components/Circuit";
 import { FOOTER_TEXT, Layout } from "../../ui/components/Layout";
+import { makeNodes, moveNodes, startNetwork, type NetworkWindow } from "../../ui/components/NodeNetwork";
 import { THEME_BUTTON_TEXT } from "../../ui/components/ThemeButton";
+import { Home, LANDING_TEXT, LANDING_TITLE, MODULE_NAME } from "../../ui/pages/Home";
 import css from "../../ui/styles.css?raw";
 import { oppositeTheme, rememberedTheme, rememberTheme, THEME_KEY } from "../../ui/theme";
 
@@ -118,5 +120,79 @@ describe("R7 keeps what spec 001 shows", () => {
     expect(out).toContain("aviso");
     expect(out).toContain("datos");
     expect(out).toContain(FOOTER_TEXT);
+  });
+});
+
+/** A canvas of 700×700 and a browser whose frames only run when the test says so. */
+function fakeNetwork(reducedMotion: boolean) {
+  const drawing = { clearRect: vi.fn(), setTransform: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), arc: vi.fn(), stroke: vi.fn() };
+  const canvas = { getContext: () => drawing, getBoundingClientRect: () => ({ width: 700, height: 700 }), width: 0, height: 0 } as unknown as HTMLCanvasElement;
+  const win = {
+    devicePixelRatio: 1,
+    matchMedia: () => ({ matches: reducedMotion }),
+    requestAnimationFrame: vi.fn(() => 5),
+    cancelAnimationFrame: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
+  return { canvas, drawing, win, browser: win as unknown as NetworkWindow };
+}
+
+describe("R8 dark landing", () => {
+  it("has the logo for dark backgrounds, the title and the text", () => {
+    const out = html(<Home />);
+    expect(out).toContain(`class="landing-logo"`);
+    expect(out).toContain(LANDING_TITLE);
+    expect(out).toContain(LANDING_TEXT);
+  });
+
+  it("is dark in either theme", () => {
+    expect(css).toMatch(/\.landing {\s*color-scheme: dark;\s*--surface-100: #0b0f2e;/);
+  });
+});
+
+describe("R9 node network", () => {
+  it("is on the landing, hidden from screen readers", () => {
+    expect(html(<Home />)).toContain(`class="node-network" aria-hidden="true"`);
+  });
+
+  it("starts with the same nodes on every load, as many as fit up to 70", () => {
+    expect(makeNodes(700, 700)).toEqual(makeNodes(700, 700));
+    expect(makeNodes(700, 700)).toHaveLength(35);
+    expect(makeNodes(1600, 1000)).toHaveLength(70);
+  });
+
+  it("moves the nodes, which turn back at the edge", () => {
+    const node = { x: 99.9, y: 50, vx: 0.2, vy: 0, color: "x" };
+    moveNodes([node], 100, 100);
+    expect(node.x).toBeCloseTo(100.1);
+    expect(node.vx).toBe(-0.2);
+  });
+
+  it("keeps animating, and stops when leaving the landing", () => {
+    const { canvas, win, browser } = fakeNetwork(false);
+    const stop = startNetwork(canvas, browser);
+    expect(win.requestAnimationFrame).toHaveBeenCalledOnce();
+    stop();
+    expect(win.cancelAnimationFrame).toHaveBeenCalledWith(5);
+    expect(win.removeEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
+  });
+});
+
+describe("R10 reduced motion", () => {
+  it("draws the network once and does not animate it", () => {
+    const { canvas, drawing, win, browser } = fakeNetwork(true);
+    startNetwork(canvas, browser);
+    expect(drawing.clearRect).toHaveBeenCalledOnce();
+    expect(drawing.arc).toHaveBeenCalledTimes(35);
+    expect(win.requestAnimationFrame).not.toHaveBeenCalled();
+  });
+});
+
+describe("R11 module selector", () => {
+  it("has the only module", () => {
+    const out = html(<Home />);
+    expect(out).toContain(MODULE_NAME);
+    expect(out.match(/<li>/g)).toHaveLength(1);
   });
 });

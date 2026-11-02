@@ -2,7 +2,7 @@
 
 type Trace = { className: string; d: string; nodes: [number, number][] };
 
-function seeded(seed: number): () => number {
+export function seeded(seed: number): () => number {
   let state = seed;
   return () => {
     state = (state * 1664525 + 1013904223) % 4294967296;
