@@ -5,9 +5,10 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]
 
 - [✓] **T1. Visual base.** Tokens, logos, themes and side menu. (R1–R7) Commit 2acf497.
   Done 2026-10-31: typecheck and tests green; owner checked logo, menu, circuit background, themes, tables and notices locally. The day selector only had one stored day (30 Oct), so changing day is covered by tests but not yet seen by the owner. The owner's first attempt failed because of a stale local dev server, not this code.
-- [x] **T2. Landing.** Dark landing with the node network and the module selector. (R8–R11)
+- [✓] **T2. Landing.** Dark landing with the node network and the module selector. (R8–R11) Commit ca13d51.
   Done 2026-11-02: typecheck and tests green; owner checked the landing locally. Changes from the prototype at the owner's request: logo 260 px wide (the traced logo looked rough at 480 px) and the logo, text and button centered as a block in the left 70% of the screen. The button still leads to `/consumo`; it changes to `/panel` in T4, when that page exists. The owner's first look failed because the dev server kept a half-updated stylesheet; saving the file again fixed it.
-- [ ] **T3. Daily data.** Measure visits over a 29-day range; API with daily series, reading missing days from Cloudflare. (R35)
+- [x] **T3. Daily data.** Measure visits over a 29-day range; API with daily series, reading missing days from Cloudflare. (R35)
+  Done 2026-11-02: typecheck and 249 tests green; checked against real data on a temporary local server (no UI in this task). Measurement: one 29-day range of visits is sampled coarsely (25 of 29 days rounded to tens, all three sites); one day per part of a single query (GraphQL aliases) gives exactly the per-day figures, in under a second per site. Days 29–26 back are coarse with any method (Cloudflare keeps them sampled). Changes from the plan: visits and Worker requests are read with one part per day instead of short ranges; Worker requests now cover the chart days except a day that began 29.5 days ago or more (R43 of spec 001 rewritten; the dashboard and the daily task use the same rule). New `/api/panel` (about 9 subrequests); `charts` in `/api/usage`; `visits` in `/api/sites/:id`. Past days read from Cloudflare are kept in memory for an hour.
 - [ ] **T4. General panel.** `/panel`, summary and site cards. (R12–R16)
 - [ ] **T5. Usage cards.** Bars per account and the (i) messages. (R17–R25)
 - [ ] **T6. Charts.** Visits per site and usage with the limit line. (R26–R34)

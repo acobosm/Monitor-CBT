@@ -82,7 +82,7 @@ history stored in D1 and a warning about the analytics token's expiration.
 - R34. WHEN the dashboard opens, the system SHALL read the current day from the API without storing it, because it is partial.
 - R35. IF the API does not respond when the dashboard opens, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Se muestra el historial guardado hasta el <fecha>."
 - R42. IF the API does not respond and no history is stored, THEN the system SHALL display "No pudimos leer los datos recientes de Cloudflare. Aún no hay historial guardado." (P10)
-- R43. WHEN the dashboard opens, the system SHALL read Worker requests only from the last 8 days, so that the range never reaches the days Cloudflare reports with coarse sampling. (P11)
+- R43. WHEN the dashboard opens, the system SHALL read Worker requests one day at a time, and never a day that began 29.5 days ago or more, so that no figure comes from the coarse sampling Cloudflare applies to long ranges. (P11; changed on 2026-11-02 by spec 003, T3: it was "only the last 8 days")
 
 ### UI and discovery
 - R36. The system SHALL show on the home page a module selector with a single option, "Cloudflare - Consumo y Tráfico", which leads to the dashboard.

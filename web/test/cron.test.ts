@@ -32,11 +32,11 @@ interface FakeOptions {
 
 /** Fake Cloudflare GraphQL API: answers by operation name with dummy fixtures and records each call. */
 function fakeCloudflare(options: FakeOptions = {}) {
-  const calls: { op: string; variables: Record<string, unknown> }[] = [];
+  const calls: { op: string; query: string; variables: Record<string, unknown> }[] = [];
   const fetchFn: typeof fetch = async (_url, init) => {
     const body = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
     const op = /query (\w+)/.exec(body.query)?.[1] ?? "unknown";
-    calls.push({ op, variables: body.variables });
+    calls.push({ op, query: body.query, variables: body.variables });
     if (op === "Settings") return Response.json({ data: settingsData });
     if (op === "AccountUsage") {
       if (body.variables.tag === options.failAccount) return new Response("unavailable", { status: 503 });
@@ -128,7 +128,8 @@ describe("R31 recovering missing days after the first stored day", () => {
     expect(await trafficDays(soma.id)).toEqual(["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27", YESTERDAY]);
     expect(await trafficDays(boraei.id)).toEqual([YESTERDAY]);
     const cobtecCall = calls.find((c) => c.op === "AccountUsage" && c.variables.tag === cobtec.accountId);
-    expect(cobtecCall?.variables).toMatchObject({ from: "2026-10-25", workersFrom: "2026-10-25", to: YESTERDAY });
+    expect(cobtecCall?.variables).toMatchObject({ from: "2026-10-25", to: YESTERDAY });
+    expect(cobtecCall?.query).toContain("w20261025: workersInvocationsAdaptive");
     expect(await count(`SELECT COUNT(DISTINCT day) AS n FROM usage_daily WHERE account_id = '${cobtec.accountId}'`)).toBe(5);
   });
 

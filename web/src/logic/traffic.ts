@@ -1,6 +1,6 @@
 // Site traffic: GraphQL zone data → SiteDay for D1, and tables ready to display (R21–R27, R29).
 // Pure: "now" is always passed in; the UI only displays what this returns.
-import type { SiteDayData, SiteDayHoursData } from "../cloudflare/queries";
+import { dayAlias, type SiteDayData, type SiteDayHoursData, type SiteVisitsData } from "../cloudflare/queries";
 import { TOP_IPS, type CountryCount, type IpCount, type SiteDay, type TrafficTotals } from "../db/statistics";
 import { ectHourRange, isPartialDay, utcDay } from "./days";
 
@@ -28,6 +28,17 @@ export function securityKind(action: string): SecurityKind | null {
   if (action === "block") return "block";
   if (/challenge/i.test(action)) return "challenge";
   return null;
+}
+
+/** Visits per requested day; a day whose part is missing from the answer has no figure (R33, R35). */
+export function parseSiteVisits(data: SiteVisitsData, days: string[]): Record<string, number> {
+  const zone = (data.viewer.zones[0] ?? {}) as Record<string, { sum: { visits: number } }[] | undefined>;
+  const visits: Record<string, number> = {};
+  for (const day of days) {
+    const part = zone[dayAlias("v", day)];
+    if (part) visits[day] = part.reduce((total, g) => total + (g.sum.visits ?? 0), 0);
+  }
+  return visits;
 }
 
 /** Variables shared by both site queries for one UTC day. */

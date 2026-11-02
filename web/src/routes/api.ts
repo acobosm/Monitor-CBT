@@ -5,35 +5,31 @@ import limitsJson from "../../config/limits.json";
 import sitesJson from "../../config/sites.json";
 import type { AccessVariables } from "../access";
 import { describeError, graphql, GraphQLError } from "../cloudflare/graphql";
-import { ACCOUNT_USAGE_QUERY, siteDayQuery, type AccountUsageData, type SiteDayData } from "../cloudflare/queries";
+import {
+  accountUsageQuery,
+  siteDayQuery,
+  siteVisitsQuery,
+  type AccountUsageData,
+  type SiteDayData,
+  type SiteVisitsData,
+} from "../cloudflare/queries";
 import { verifyToken } from "../cloudflare/token";
 import { recordAudit } from "../db/audit";
-import { readSiteDayDetail, readSiteTraffic, readUsage, zoneDatasets, type TrafficTotals, type UsageMetric } from "../db/statistics";
-import { TtlCache } from "../logic/cache";
-import { utcDay } from "../logic/days";
+import { readSiteDayDetail, readSiteTraffic, readUsage, zoneDatasets, type TrafficTotals } from "../db/statistics";
+import { PAST_TTL_MS, TtlCache } from "../logic/cache";
+import { chartDays, dayRange, utcDay, workerDays } from "../logic/days";
 import { liveReadNotice } from "../logic/notices";
+import { dayPoints, mergeHistory, panelSummary, siteSummary, usageCharts } from "../logic/series";
 import { evaluateToken } from "../logic/token";
-import { countryShares, datasetNotice, ipRows, parseSiteDay, siteDayVariables, trafficTable, type SiteConfig } from "../logic/traffic";
-import { evaluateUsage, parseAccountUsage, partialDayMetrics, type LimitsConfig, type ParsedAccountUsage } from "../logic/usage";
+import { countryShares, datasetNotice, ipRows, parseSiteDay, parseSiteVisits, siteDayVariables, trafficTable, type SiteConfig } from "../logic/traffic";
+import { evaluateUsage, nearLimit, parseAccountUsage, partialDayMetrics, type LimitsConfig, type ParsedAccountUsage } from "../logic/usage";
 
-const DAY_MS = 86_400_000;
 const limits = limitsJson as LimitsConfig;
 const sites = sitesJson.sites as SiteConfig[];
 
 export interface ApiDeps {
   fetchFn?: typeof fetch;
   now?: () => Date;
-}
-
-function shiftDay(day: string, days: number): string {
-  return utcDay(new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS));
-}
-
-/** Days from `from` to `to`, both included. */
-function dayRange(from: string, to: string): string[] {
-  const days: string[] = [];
-  for (let day = from; day <= to; day = shiftDay(day, 1)) days.push(day);
-  return days;
 }
 
 function isValidDay(day: string): boolean {
@@ -48,11 +44,91 @@ export function apiRoutes(deps: ApiDeps = {}) {
   const fetchFn: typeof fetch = deps.fetchFn ?? ((input, init) => fetch(input, init));
   const clock = deps.now ?? (() => new Date());
   const cache = new TtlCache();
+  const pastCache = new TtlCache(PAST_TTL_MS);
   const api = new Hono<{ Bindings: Env; Variables: AccessVariables }>();
 
   function requireToken(env: Env): string {
     if (!env.CLOUDFLARE_ANALYTICS_TOKEN) throw new GraphQLError("auth", "Analytics token is not set");
     return env.CLOUDFLARE_ANALYTICS_TOKEN;
+  }
+
+  /**
+   * Usage of every account: stored days completed with one live query per account, which covers the month
+   * and the 30 chart days. Nothing read here is stored (R34, R35).
+   */
+  async function accountsUsage(env: Env, now: Date) {
+    const today = utcDay(now);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const days = chartDays(now);
+    // At most 31 days per query: the month, or the chart days when they reach into the previous month.
+    const fromDay = days[0]! < monthStart ? days[0]! : monthStart;
+    const stored = await readUsage(env.STATS_DB, fromDay);
+    const query = accountUsageQuery(workerDays(dayRange(fromDay, today), now));
+
+    const results = await Promise.allSettled(
+      sitesJson.accounts.map((account) =>
+        cache.get<ParsedAccountUsage>(`usage:${account.accountId}:${today}`, now.getTime(), async () => {
+          const data = await graphql<AccountUsageData>(requireToken(env), query, { tag: account.accountId, from: fromDay, to: today }, fetchFn);
+          return parseAccountUsage(data, dayRange(fromDay, today));
+        }),
+      ),
+    );
+
+    let rejected = false;
+    let failed = false;
+    const accounts = sitesJson.accounts.map((account, i) => {
+      const result = results[i]!;
+      let history = stored.accounts[account.accountId] ?? {};
+      let extras: { unclassifiedR2?: string[]; largestD1Id?: string | null } = {};
+      if (result.status === "fulfilled") {
+        const live = result.value;
+        history = mergeHistory(history, live.days);
+        history[today] = partialDayMetrics(live.days[today] ?? []);
+        // The base named is the one of the day whose size is shown: a database deleted since then is not named.
+        const shownDay = Object.keys(history).filter((d) => history[d]?.some((m) => m.metric === "largest_db_bytes")).sort().at(-1);
+        extras = { unclassifiedR2: live.unclassifiedR2, largestD1Id: shownDay ? live.largestD1[shownDay] : null };
+      } else {
+        failed = true;
+        rejected ||= tokenRejected(result.reason);
+        console.error("live usage failed", { account: account.id, error: describeError(result.reason) });
+      }
+      return {
+        id: account.id,
+        name: account.name,
+        accountId: account.accountId,
+        live: result.status === "fulfilled",
+        table: evaluateUsage(history, limits, now, extras),
+        charts: usageCharts(history, limits, now),
+      };
+    });
+    return { accounts, failed, rejected, lastDay: stored.lastDay };
+  }
+
+  /**
+   * Daily visits of one site for the chart days (R26, R35): stored days, and the missing ones read from
+   * Cloudflare one day per part of a single query, without storing them. `today` is the live figure when the
+   * caller already has it; otherwise today is read too.
+   */
+  async function siteVisits(env: Env, site: SiteConfig, now: Date, stored: Record<string, TrafficTotals>, today?: number | null) {
+    const day = utcDay(now);
+    const values: Record<string, number | null> = Object.fromEntries(Object.entries(stored).map(([d, t]) => [d, t.visits]));
+    const read = async (cacheOf: TtlCache, days: string[]) => {
+      if (!days.length) return {};
+      return cacheOf.get(`visits:${site.id}:${days.join(",")}`, now.getTime(), async () => {
+        const data = await graphql<SiteVisitsData>(requireToken(env), siteVisitsQuery(days, !!site.host), { tag: site.zoneTag, ...(site.host ? { host: site.host } : {}) }, fetchFn);
+        return parseSiteVisits(data, days);
+      });
+    };
+
+    let error: unknown = null;
+    const missing = chartDays(now).filter((d) => d !== day && !(d in stored));
+    const [past, live] = await Promise.allSettled([read(pastCache, missing), today === undefined ? read(cache, [day]) : Promise.resolve({ [day]: today })]);
+    for (const result of [past, live]) {
+      if (result.status === "fulfilled") Object.assign(values, result.value);
+      else error = result.reason;
+    }
+    if (error) console.error("live visits failed", { site: site.id, error: describeError(error) });
+    return { points: dayPoints(values, now), error };
   }
 
   /** R8–R13. */
@@ -67,56 +143,43 @@ export function apiRoutes(deps: ApiDeps = {}) {
     const now = clock();
     await recordAudit(c.env.AUDIT_DB, { email: c.get("email"), action: "view", target: "usage" }, now);
 
-    const today = utcDay(now);
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const weekBack = shiftDay(today, -8);
-    // One query per account covers the month and the last week: figures are complete from the first day,
-    // when D1 has no history yet (P9). Nothing read here is stored (R34). Worker requests are a daily metric
-    // (today and 7-day peak), so they only need the last week, which keeps them precise (R43).
-    const fromDay = weekBack < monthStart ? weekBack : monthStart;
-    const stored = await readUsage(c.env.STATS_DB, fromDay);
+    const usage = await accountsUsage(c.env, now);
+    return c.json({
+      accounts: usage.accounts.map((a) => ({ id: a.id, name: a.name, live: a.live, ...a.table, charts: a.charts })),
+      notice: usage.failed ? liveReadNotice(usage.rejected, usage.lastDay) : null,
+    });
+  });
 
-    const results = await Promise.allSettled(
-      sitesJson.accounts.map((account) =>
-        cache.get<ParsedAccountUsage>(`usage:${account.accountId}:${today}`, now.getTime(), async () => {
-          const data = await graphql<AccountUsageData>(
-            requireToken(c.env),
-            ACCOUNT_USAGE_QUERY,
-            { tag: account.accountId, from: fromDay, workersFrom: weekBack, to: today },
-            fetchFn,
-          );
-          return parseAccountUsage(data, dayRange(fromDay, today));
-        }),
-      ),
+  /** R13–R16: summary and one card per site. It shows every site together, so it stays owner-only. */
+  api.get("/panel", async (c) => {
+    const now = clock();
+    await recordAudit(c.env.AUDIT_DB, { email: c.get("email"), action: "view", target: "panel" }, now);
+
+    const usage = await accountsUsage(c.env, now);
+    const cards = await Promise.all(
+      sites.map(async (site) => {
+        const stored = await readSiteTraffic(c.env.STATS_DB, site.id, chartDays(now)[0]!);
+        const visits = await siteVisits(c.env, site, now, stored.traffic);
+        const account = usage.accounts.find((a) => a.accountId === site.accountId);
+        return {
+          id: site.id,
+          name: site.name,
+          domain: site.zone,
+          nearLimit: account ? nearLimit(account.table.rows) : false,
+          summary: siteSummary(visits.points, now),
+          visits: visits.points,
+          error: visits.error,
+        };
+      }),
     );
 
-    let rejected = false;
-    let failed = false;
-    const accounts = sitesJson.accounts.map((account, i) => {
-      const result = results[i]!;
-      const history: Record<string, UsageMetric[]> = { ...stored.accounts[account.accountId] };
-      let extras: { unclassifiedR2?: string[]; largestD1Id?: string | null } = {};
-      if (result.status === "fulfilled") {
-        const live = result.value;
-        Object.assign(history, live.days);
-        history[today] = partialDayMetrics(live.days[today] ?? []);
-        // The base named is the one of the day whose size is shown: a database deleted since then is not named.
-        const shownDay = Object.keys(history).filter((d) => history[d]?.some((m) => m.metric === "largest_db_bytes")).sort().at(-1);
-        extras = { unclassifiedR2: live.unclassifiedR2, largestD1Id: shownDay ? live.largestD1[shownDay] : null };
-      } else {
-        failed = true;
-        rejected ||= tokenRejected(result.reason);
-        console.error("live usage failed", { account: account.id, error: describeError(result.reason) });
-      }
-      return {
-        id: account.id,
-        name: account.name,
-        live: result.status === "fulfilled",
-        ...evaluateUsage(history, limits, now, extras),
-      };
+    const failed = usage.failed || cards.some((card) => card.error);
+    const rejected = usage.rejected || cards.some((card) => tokenRejected(card.error));
+    return c.json({
+      summary: panelSummary(cards),
+      cards: cards.map(({ error: _error, ...card }) => card),
+      notice: failed ? liveReadNotice(rejected, usage.lastDay) : null,
     });
-
-    return c.json({ accounts, notice: failed ? liveReadNotice(rejected, stored.lastDay) : null });
   });
 
   /** R21–R27, R34, R35, R42. */
@@ -126,7 +189,7 @@ export function apiRoutes(deps: ApiDeps = {}) {
 
     const now = clock();
     const today = utcDay(now);
-    const stored = await readSiteTraffic(c.env.STATS_DB, site.id, shiftDay(today, -29));
+    const stored = await readSiteTraffic(c.env.STATS_DB, site.id, chartDays(now)[0]!);
 
     const requestedDay = c.req.query("day");
     if (requestedDay !== undefined && !(isValidDay(requestedDay) && stored.days.includes(requestedDay))) {
@@ -150,6 +213,8 @@ export function apiRoutes(deps: ApiDeps = {}) {
       notice = liveReadNotice(tokenRejected(error), stored.days.at(-1) ?? null);
     }
 
+    // R26: the chart reuses today's live figure; only the days missing from D1 are read.
+    const visits = await siteVisits(c.env, site, now, stored.traffic, traffic[today]?.visits ?? null);
     const datasets = await zoneDatasets(c.env.STATS_DB, site.zoneTag);
     const unavailable = datasetNotice(datasets.httpRequestsAdaptiveGroups);
     const detail = selectedDay && !unavailable ? await readSiteDayDetail(c.env.STATS_DB, site.id, selectedDay) : null;
@@ -159,6 +224,7 @@ export function apiRoutes(deps: ApiDeps = {}) {
       name: site.name,
       notice,
       traffic: trafficTable(traffic, now),
+      visits: visits.points,
       pageViewsNotice: datasetNotice(datasets.httpRequests1dGroups),
       days: stored.days,
       selectedDay,

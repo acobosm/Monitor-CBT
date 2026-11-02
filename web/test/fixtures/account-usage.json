@@ -2,11 +2,9 @@
   "viewer": {
     "accounts": [
       {
-        "workers": [
-          { "sum": { "requests": 1200 }, "dimensions": { "date": "2026-10-27" } },
-          { "sum": { "requests": 300 }, "dimensions": { "date": "2026-10-27" } },
-          { "sum": { "requests": 900 }, "dimensions": { "date": "2026-10-28" } }
-        ],
+        "w20261027": [{ "sum": { "requests": 1200 } }, { "sum": { "requests": 300 } }],
+        "w20261028": [{ "sum": { "requests": 900 } }],
+        "w20261029": [],
         "d1": [
           { "sum": { "rowsRead": 40000, "rowsWritten": 250 }, "dimensions": { "date": "2026-10-28" } }
         ],

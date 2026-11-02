@@ -10,6 +10,15 @@ export const IP_RETENTION_MONTHS = 13;
 /** Ecuador (ECT) is always UTC−05:00, with no daylight saving time. */
 const ECT_OFFSET_MS = -5 * HOUR_MS;
 
+/**
+ * Oldest start of a day whose Worker requests are read: P11 measured a range starting 29 days and 16 hours
+ * back as precise and one at 30 days and 16 hours as coarse, so a day that began longer ago is not read (R43).
+ */
+export const MAX_WORKER_DAY_AGE_MS = 29.5 * DAY_MS;
+
+/** Days a chart shows: the last 30, today included, oldest first (R26). */
+export const CHART_DAYS = 30;
+
 /** UTC day of a date, as `YYYY-MM-DD`. */
 export function utcDay(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -22,6 +31,24 @@ function addDays(day: string, days: number): string {
 /** The day the daily task processes: yesterday in UTC (R28). */
 export function previousUtcDay(now: Date): string {
   return addDays(utcDay(now), -1);
+}
+
+/** Days from `from` to `to`, both included. */
+export function dayRange(from: string, to: string): string[] {
+  const days: string[] = [];
+  for (let day = from; day <= to; day = addDays(day, 1)) days.push(day);
+  return days;
+}
+
+/** The days of a chart (R26). */
+export function chartDays(now: Date): string[] {
+  const today = utcDay(now);
+  return dayRange(addDays(today, 1 - CHART_DAYS), today);
+}
+
+/** The days whose Worker requests may be read at `now` (R43). */
+export function workerDays(days: string[], now: Date): string[] {
+  return days.filter((day) => now.getTime() - Date.parse(`${day}T00:00:00Z`) < MAX_WORKER_DAY_AGE_MS);
 }
 
 /** True for the day in progress, whose data is partial (R22, R34). */

@@ -1,17 +1,31 @@
 // GraphQL queries (sources confirmed by the T3 discovery, docs/DATA_MODEL.md "GraphQL sources").
 
+const DAY_MS = 86_400_000;
+
+/** Days written into a query are always `YYYY-MM-DD` built by the app; anything else is refused. */
+function checkedDay(day: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`Invalid day: ${day}`);
+  return day;
+}
+
+/** Name of the part of a query that reads one day, e.g. `w20261031` for Worker requests. */
+export function dayAlias(prefix: "w" | "v", day: string): string {
+  return `${prefix}${checkedDay(day).replaceAll("-", "")}`;
+}
+
 /**
  * Plan usage of one account for a range of UTC days (at most 32 days per query). One subrequest per
- * account covers the whole backfill window plus today. Worker requests have their own start: a range
- * reaching a day about 30 days old is sampled coarsely as a whole (P11).
+ * account covers the whole window plus today. Worker requests are read one day per part of the query:
+ * a range reaching a day about 30 days old is sampled coarsely as a whole, a single day is not (P11, R43).
  */
-export const ACCOUNT_USAGE_QUERY = `query AccountUsage($tag: string!, $from: Date!, $workersFrom: Date!, $to: Date!) {
+export function accountUsageQuery(workerDays: string[]): string {
+  const workers = workerDays
+    .map((day) => `${dayAlias("w", day)}: workersInvocationsAdaptive(limit: 1, filter: { date_geq: "${day}", date_leq: "${day}" }) { sum { requests } }`)
+    .join("\n      ");
+  return `query AccountUsage($tag: string!, $from: Date!, $to: Date!) {
   viewer {
     accounts(filter: { accountTag: $tag }) {
-      workers: workersInvocationsAdaptive(limit: 10000, filter: { date_geq: $workersFrom, date_leq: $to }) {
-        sum { requests }
-        dimensions { date }
-      }
+      ${workers}
       d1: d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date_geq: $from, date_leq: $to }) {
         sum { rowsRead rowsWritten }
         dimensions { date }
@@ -31,16 +45,16 @@ export const ACCOUNT_USAGE_QUERY = `query AccountUsage($tag: string!, $from: Dat
     }
   }
 }`;
+}
 
 export interface AccountUsageData {
   viewer: {
-    accounts: {
-      workers: { sum: { requests: number }; dimensions: { date: string } }[];
+    accounts: ({
       d1: { sum: { rowsRead: number; rowsWritten: number }; dimensions: { date: string } }[];
       d1Storage: { max: { databaseSizeBytes: number }; dimensions: { date: string; databaseId: string } }[];
       r2Ops: { sum: { requests: number }; dimensions: { date: string; actionType: string } }[];
       r2Storage: { max: { payloadSize: number; metadataSize: number }; dimensions: { date: string; bucketName: string } }[];
-    }[];
+    } & { [alias: `w${number}`]: { sum: { requests: number } }[] | undefined })[];
   };
 }
 
@@ -80,6 +94,29 @@ export function siteDayQuery(withHost: boolean): string {
     }
   }
 }`;
+}
+
+/**
+ * Visits of one site, one part of the query per UTC day: a single range of many days is sampled coarsely
+ * (measured 2026-11-02), one day per part gives the same figures as one query per day (R35).
+ */
+export function siteVisitsQuery(days: string[], withHost: boolean): string {
+  const parts = days.map((day) => {
+    const end = new Date(Date.parse(`${checkedDay(day)}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
+    const filter = `{ datetime_geq: "${day}T00:00:00Z", datetime_lt: "${end}T00:00:00Z", requestSource: "eyeball"${withHost ? ", clientRequestHTTPHost: $host" : ""} }`;
+    return `${dayAlias("v", day)}: httpRequestsAdaptiveGroups(limit: 1, filter: ${filter}) { sum { visits } }`;
+  });
+  return `query SiteVisits($tag: string!${withHost ? ", $host: string!" : ""}) {
+  viewer {
+    zones(filter: { zoneTag: $tag }) {
+      ${parts.join("\n      ")}
+    }
+  }
+}`;
+}
+
+export interface SiteVisitsData {
+  viewer: { zones: { [alias: `v${number}`]: { sum: { visits: number } }[] | undefined }[] };
 }
 
 /** Hours in which the top IPs were seen that day, to show the last one (P5). */

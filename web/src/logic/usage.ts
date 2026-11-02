@@ -1,7 +1,7 @@
 // Plan usage: parse GraphQL account data into daily metrics and evaluate them against the Free limits.
 // Pure: "now" is always passed in; the UI only displays what this returns (R14–R20).
 import type { Product, UsageMetric } from "../db/statistics";
-import type { AccountUsageData } from "../cloudflare/queries";
+import { dayAlias, type AccountUsageData } from "../cloudflare/queries";
 import { utcDay } from "./days";
 
 const DAY_MS = 86_400_000;
@@ -64,19 +64,28 @@ export interface ParsedAccountUsage {
   largestD1: Record<string, string | null>;
 }
 
-/** Turns one AccountUsage response into the full set of metrics for each requested day. */
+/**
+ * Turns one AccountUsage response into the full set of metrics for each requested day. Worker requests
+ * come in one part per day: a day whose part was not requested has no Worker figure, never a 0 (R43).
+ */
 export function parseAccountUsage(data: AccountUsageData, days: string[]): ParsedAccountUsage {
   const account = data.viewer.accounts[0];
+  const workerParts = (account ?? {}) as Record<string, { sum: { requests: number } }[] | undefined>;
   const totals = new Map<string, Map<string, number>>(
-    days.map((day) => [day, new Map(ACCOUNT_METRICS.map((m) => [`${m.product}:${m.metric}`, 0]))]),
+    days.map((day) => [
+      day,
+      new Map(
+        ACCOUNT_METRICS.filter((m) => m.product !== "workers" || (account && workerParts[dayAlias("w", day)])).map((m) => [`${m.product}:${m.metric}`, 0]),
+      ),
+    ]),
   );
   const add = (day: string, key: string, value: number | null | undefined) => {
     const metrics = totals.get(day);
-    if (metrics && value) metrics.set(key, (metrics.get(key) ?? 0) + value);
+    if (metrics?.has(key) && value) metrics.set(key, (metrics.get(key) ?? 0) + value);
   };
   const unclassified = new Set<string>();
 
-  for (const row of account?.workers ?? []) add(row.dimensions.date, "workers:requests", row.sum.requests);
+  for (const day of days) for (const row of workerParts[dayAlias("w", day)] ?? []) add(day, "workers:requests", row.sum.requests);
   for (const row of account?.d1 ?? []) {
     add(row.dimensions.date, "d1:rows_read", row.sum.rowsRead);
     add(row.dimensions.date, "d1:rows_written", row.sum.rowsWritten);
@@ -110,7 +119,7 @@ export function parseAccountUsage(data: AccountUsageData, days: string[]): Parse
     days: Object.fromEntries(
       [...totals].map(([day, metrics]) => [
         day,
-        ACCOUNT_METRICS.map((m) => ({ ...m, value: metrics.get(`${m.product}:${m.metric}`) ?? 0 })),
+        ACCOUNT_METRICS.filter((m) => metrics.has(`${m.product}:${m.metric}`)).map((m) => ({ ...m, value: metrics.get(`${m.product}:${m.metric}`) ?? 0 })),
       ]),
     ),
     unclassifiedR2: [...unclassified].sort(),
@@ -167,6 +176,20 @@ const METRIC_LABELS: Record<string, string> = {
   "r2:class_b_ops": "Operaciones Clase B",
   "r2:storage_bytes": "Almacenamiento",
 };
+export function metricLabel(product: Product, metric: string): string {
+  return METRIC_LABELS[`${product}:${metric}`] ?? metric;
+}
+
+/** True when the metric uses its latest value (storage and database count), not a sum over a period. */
+export function isLatestValue(period: Period, metric: string): boolean {
+  return period === "total" || metric.endsWith("_bytes");
+}
+
+/** States that put an account "Cerca del límite" or worse (R15). */
+export function nearLimit(rows: UsageRow[]): boolean {
+  return rows.some((r) => r.state === "near" || r.state === "critical" || r.state === "exceeded");
+}
+
 const PERIOD_LABELS: Record<Period, string> = { daily: "Diario", monthly: "Mensual", total: "Total" };
 
 export const TEXT_RESET = "Se reinicia a las 19:00 ECT";
@@ -217,7 +240,7 @@ export function evaluateUsage(
     const period: Period = config?.period ?? (metric.endsWith("_bytes") ? "total" : "daily");
     const limit = config?.limit ?? null;
     // Storage and totals (database count) use the latest value, not a sum over a period.
-    const latest = period === "total" || metric.endsWith("_bytes");
+    const latest = isLatestValue(period, metric);
     let usage: number;
     let peak7: number | null = null;
     let note: string | null = null;
@@ -256,7 +279,7 @@ export function evaluateUsage(
       product,
       productLabel: PRODUCT_LABELS[product],
       metric,
-      label: METRIC_LABELS[`${product}:${metric}`] ?? metric,
+      label: metricLabel(product, metric),
       period,
       periodLabel: PERIOD_LABELS[period],
       usage,

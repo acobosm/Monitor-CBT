@@ -3,6 +3,8 @@
 
 /** How long a current-day read is reused (300 GraphQL queries per 5 minutes). */
 export const LIVE_TTL_MS = 60_000;
+/** How long a read of complete past days is reused: they barely change, and charts read many of them. */
+export const PAST_TTL_MS = 3_600_000;
 
 export class TtlCache {
   private entries = new Map<string, { expires: number; value: Promise<unknown> }>();

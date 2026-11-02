@@ -75,7 +75,7 @@ describe("parseAccountUsage", () => {
   });
 
   it("handles an account without any product (like COBTEC without Workers or D1)", () => {
-    const empty = { viewer: { accounts: [{ workers: [], d1: [], d1Storage: [], r2Ops: [], r2Storage: [] }] } };
+    const empty = { viewer: { accounts: [{ w20261028: [], d1: [], d1Storage: [], r2Ops: [], r2Storage: [] }] } };
     const result = parseAccountUsage(empty, ["2026-10-28"]);
     expect(result.days["2026-10-28"]).toHaveLength(ACCOUNT_METRICS.length);
   });

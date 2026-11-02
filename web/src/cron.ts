@@ -5,7 +5,7 @@
 import sitesJson from "../config/sites.json";
 import { describeError, graphql } from "./cloudflare/graphql";
 import {
-  ACCOUNT_USAGE_QUERY,
+  accountUsageQuery,
   settingsQuery,
   siteDayHoursQuery,
   siteDayQuery,
@@ -15,7 +15,7 @@ import {
   type SiteDayHoursData,
 } from "./cloudflare/queries";
 import { purgeIpsBefore, saveAccountDays, saveDatasetAvailability, saveSiteDay, storedDays } from "./db/statistics";
-import { BACKFILL_DAYS, gapDays, ipCutoffDay, previousUtcDay, utcDay } from "./logic/days";
+import { BACKFILL_DAYS, gapDays, ipCutoffDay, previousUtcDay, utcDay, workerDays } from "./logic/days";
 import { parseSettings, settingsVariables } from "./logic/discovery";
 import { hoursVariables, parseSiteDay, siteDayVariables, topIpsOf, type SiteConfig } from "./logic/traffic";
 import { parseAccountUsage } from "./logic/usage";
@@ -106,7 +106,8 @@ export async function runDailyTask(
     const gaps = gapDays(stored.accounts.days[id] ?? [], stored.accounts.first[id] ?? null, now);
     const days = [...new Set([...gaps, yesterday])].sort();
     try {
-      const data = await graphql<AccountUsageData>(token, ACCOUNT_USAGE_QUERY, { tag: id, from: days[0], workersFrom: days[0], to: yesterday }, fetchFn);
+      const query = accountUsageQuery(workerDays(days, now));
+      const data = await graphql<AccountUsageData>(token, query, { tag: id, from: days[0], to: yesterday }, fetchFn);
       const parsed = parseAccountUsage(data, days);
       await saveAccountDays(db, id, parsed.days, now);
       summary.accountsStored.push(account.id);

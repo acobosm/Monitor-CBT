@@ -24,15 +24,13 @@ interface FakeOptions {
 
 /** Fake Cloudflare: dummy data only, every call recorded. */
 function fakeCloudflare(options: FakeOptions = {}) {
-  const calls: { op: string; variables: Record<string, unknown> }[] = [];
+  const calls: { op: string; query: string; variables: Record<string, unknown> }[] = [];
   const usage = {
     viewer: {
       accounts: [
         {
-          workers: [
-            { sum: { requests: 900 }, dimensions: { date: TODAY } },
-            { sum: { requests: 2000 }, dimensions: { date: YESTERDAY } },
-          ],
+          w20261029: [{ sum: { requests: 900 } }],
+          w20261028: [{ sum: { requests: 2000 } }],
           d1: [],
           d1Storage: [{ max: { databaseSizeBytes: 1000 }, dimensions: { date: YESTERDAY, databaseId: "db-1" } }],
           r2Storage: [],
@@ -43,18 +41,25 @@ function fakeCloudflare(options: FakeOptions = {}) {
   };
   const fetchFn: typeof fetch = async (url, init) => {
     if (String(url).includes("tokens/verify")) {
-      calls.push({ op: "verify", variables: {} });
+      calls.push({ op: "verify", query: "", variables: {} });
       return options.verify
         ? options.verify()
         : Response.json({ success: true, result: { status: "active", not_before: "2026-10-01T00:00:00Z", expires_on: "2026-12-31T00:00:00Z" } });
     }
     const body = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
     const op = /query (\w+)/.exec(body.query)?.[1] ?? "unknown";
-    calls.push({ op, variables: body.variables });
+    calls.push({ op, query: body.query, variables: body.variables });
     if (options.graphql) return options.graphql();
+    if (op === "SiteVisits") return Response.json({ data: siteVisits(body.query) });
     return Response.json({ data: op === "AccountUsage" ? usage : dayFixture });
   };
   return { fetchFn, calls };
+}
+
+/** Answers every day asked by a SiteVisits query with 5 visits, except 2026-10-20, which is left out. */
+function siteVisits(query: string) {
+  const parts = [...query.matchAll(/(v\d{8}):/g)].map((m) => m[1]!).filter((alias) => alias !== "v20261020");
+  return { viewer: { zones: [Object.fromEntries(parts.map((alias) => [alias, [{ sum: { visits: 5 } }]]))] } };
 }
 
 function appWith(fake: ReturnType<typeof fakeCloudflare>, now = () => NOW) {
@@ -104,7 +109,7 @@ afterEach(() => {
 });
 
 describe("R1 data routes are protected", () => {
-  for (const path of ["/api/token", "/api/usage", "/api/sites/soma"]) {
+  for (const path of ["/api/token", "/api/usage", "/api/sites/soma", "/api/panel"]) {
     it(`${path} answers 403 without a JWT and calls nothing`, async () => {
       const fake = fakeCloudflare();
       const res = await appWith(fake).request(`${ORIGIN}${path}`, {}, env);
@@ -123,7 +128,7 @@ describe("R5 the token never reaches a response", () => {
     });
     for (const fake of [fakeCloudflare(), quoting]) {
       const app = appWith(fake);
-      for (const path of ["/api/token", "/api/usage", "/api/sites/soma"]) {
+      for (const path of ["/api/token", "/api/usage", "/api/sites/soma", "/api/panel"]) {
         expect(await (await get(app, path)).text()).not.toContain("test-token");
       }
     }
@@ -225,7 +230,7 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
   it("P8 does not name a database that no longer appears on the day shown", async () => {
     const usage = {
       viewer: {
-        accounts: [{ workers: [], d1: [], r2Storage: [], r2Ops: [], d1Storage: [{ max: { databaseSizeBytes: 1000 }, dimensions: { date: "2026-10-20", databaseId: "db-gone" } }] }],
+        accounts: [{ d1: [], r2Storage: [], r2Ops: [], d1Storage: [{ max: { databaseSizeBytes: 1000 }, dimensions: { date: "2026-10-20", databaseId: "db-gone" } }] }],
       },
     };
     const fake = fakeCloudflare({ graphql: () => Response.json({ data: usage }) });
@@ -238,20 +243,27 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
     const fake = fakeCloudflare();
     await get(appWith(fake), "/api/usage");
     expect(fake.calls.map((c) => c.op)).toEqual(["AccountUsage", "AccountUsage", "AccountUsage"]);
-    expect(fake.calls[0]?.variables).toMatchObject({ to: TODAY, from: "2026-10-01" });
+    expect(fake.calls[0]?.variables).toMatchObject({ to: TODAY, from: "2026-09-30" });
     expect(await db.prepare("SELECT COUNT(*) AS n FROM usage_daily").first("n")).toBe(0);
   });
 
-  it("uses at most 32 days per query, also when the week reaches into the previous month", async () => {
+  it("uses at most 31 days per query: the month, or the chart days when they reach into the previous month", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake, () => new Date("2026-10-03T12:00:00Z")), "/api/usage");
-    expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-09-25", to: "2026-10-03" });
+    expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-09-04", to: "2026-10-03" });
+    await get(appWith(fake, () => new Date("2026-10-31T12:00:00Z")), "/api/usage");
+    expect(fake.calls.at(-1)?.variables).toMatchObject({ from: "2026-10-01", to: "2026-10-31" });
   });
 
-  it("R43 reads Worker requests from the last 8 days, also on the 31st, when the month reaches 30 days back", async () => {
-    const fake = fakeCloudflare();
-    await get(appWith(fake, () => new Date("2026-10-31T16:00:00Z")), "/api/usage");
-    expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-10-01", workersFrom: "2026-10-23", to: "2026-10-31" });
+  it("R43 reads Worker requests one day per part, never a day that began 29.5 days ago or more", async () => {
+    const workerParts = (query: string) => [...query.matchAll(/(w\d{8}): workersInvocationsAdaptive/g)].map((m) => m[1]);
+    const late = fakeCloudflare();
+    await get(appWith(late, () => new Date("2026-10-31T16:00:00Z")), "/api/usage");
+    expect(workerParts(late.calls[0]!.query)).toHaveLength(29);
+    expect(workerParts(late.calls[0]!.query)[0]).toBe("w20261003");
+    const early = fakeCloudflare();
+    await get(appWith(early, () => new Date("2026-10-31T05:00:00Z")), "/api/usage");
+    expect(workerParts(early.calls[0]!.query)[0]).toBe("w20261002");
   });
 
   it("R34 reuses the read for 60 seconds, then reads again", async () => {
@@ -319,22 +331,23 @@ describe("/api/sites/:id (R21–R27, R34, R35, R42)", () => {
     expect(body.traffic.rows[2].totals).toBeNull();
   });
 
-  it("R34 reads today with one query and stores nothing", async () => {
+  it("R34 reads today with one query, R35 the missing chart days with another, and stores nothing", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake), "/api/sites/soma");
-    expect(fake.calls.map((c) => c.op)).toEqual(["SiteDay"]);
+    expect(fake.calls.map((c) => c.op)).toEqual(["SiteDay", "SiteVisits"]);
     expect(fake.calls[0]?.variables).toMatchObject({ day: TODAY, tag: soma.zoneTag });
+    expect(fake.calls[1]?.variables).toEqual({ tag: soma.zoneTag });
     expect(await db.prepare("SELECT COUNT(*) AS n FROM traffic_daily").first("n")).toBe(0);
   });
 
-  it("R34 reuses the read for 60 seconds, per site", async () => {
+  it("R34 reuses the reads, per site", async () => {
     const fake = fakeCloudflare();
     const app = appWith(fake);
     await get(app, "/api/sites/soma");
     await get(app, "/api/sites/soma");
-    expect(fake.calls).toHaveLength(1);
-    await get(app, "/api/sites/boraei");
     expect(fake.calls).toHaveLength(2);
+    await get(app, "/api/sites/boraei");
+    expect(fake.calls).toHaveLength(4);
   });
 
   it("R24, R25, R26 selects the last complete day by default, with countries and both top IP tables", async () => {
@@ -417,5 +430,91 @@ describe("/api/sites/:id (R21–R27, R34, R35, R42)", () => {
   it("R11 shows the token notice when Cloudflare rejects the token", async () => {
     const fake = fakeCloudflare({ graphql: () => new Response("no", { status: 401 }) });
     expect((await json(await get(appWith(fake), "/api/sites/soma"))).notice).toBe(TEXT_INVALID);
+  });
+});
+
+describe("charts and panel data (R13–R16, R26–R35)", () => {
+  const point = (points: { day: string; value: number | null }[], day: string) => points.find((p) => p.day === day);
+
+  it("R26 R27 R35 gives a site's visits of 30 days: stored, read day by day, and today's live figure", async () => {
+    await saveSiteDay(db, storedDay(YESTERDAY));
+    const fake = fakeCloudflare();
+    const body = await json(await get(appWith(fake), "/api/sites/soma"));
+    expect(body.visits).toHaveLength(30);
+    expect(point(body.visits, YESTERDAY)?.value).toBe(2);
+    expect(point(body.visits, "2026-10-27")?.value).toBe(5);
+    expect(body.visits.at(-1)).toEqual({ day: TODAY, value: 105, partial: true });
+    const asked = fake.calls.find((c) => c.op === "SiteVisits")!.query;
+    expect(asked).not.toContain("v20261028:");
+    expect(asked).not.toContain("v20261029:");
+    // R35: up to 29 days back, never further.
+    expect(asked).toContain("v20260930:");
+    expect(asked).not.toContain("v20260929:");
+  });
+
+  it("R33 leaves a day Cloudflare does not answer empty, never 0", async () => {
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/sites/soma"));
+    expect(point(body.visits, "2026-10-20")?.value).toBeNull();
+  });
+
+  it("R35 keeps the chart's stored days when the read of the missing ones fails", async () => {
+    await saveSiteDay(db, storedDay(YESTERDAY));
+    const fake = fakeCloudflare({ graphql: () => new Response("down", { status: 503 }) });
+    const body = await json(await get(appWith(fake), "/api/sites/soma"));
+    expect(point(body.visits, YESTERDAY)?.value).toBe(2);
+    expect(point(body.visits, "2026-10-27")?.value).toBeNull();
+  });
+
+  it("R28 gives each account one chart per metric with a limit", async () => {
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/usage"));
+    const workers = body.accounts[0].charts.find((c: { metric: string }) => c.metric === "requests");
+    expect(workers).toMatchObject({ label: "Peticiones de Worker", limit: 100000 });
+    expect(point(workers.points, YESTERDAY)?.value).toBe(2000);
+    expect(workers.points.at(-1)).toMatchObject({ day: TODAY, value: 900, partial: true });
+  });
+
+  it("R13 R14 gives the panel summary and one card per site", async () => {
+    await saveSiteDay(db, storedDay(YESTERDAY));
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/panel"));
+    expect(body.notice).toBeNull();
+    expect(body.summary).toEqual({ visitsYesterday: 2 + 5 + 5, sites: 3, nearLimit: 0 });
+    expect(body.cards.map((c: { id: string }) => c.id)).toEqual(sitesJson.sites.map((s) => s.id));
+    expect(body.cards[0]).toMatchObject({ name: "SOMA", domain: "somabwc.com", nearLimit: false, summary: { yesterday: 2 } });
+    expect(body.cards[0].visits).toHaveLength(30);
+    expect(body.cards[1].visits.at(-1)).toMatchObject({ day: TODAY, value: 5, partial: true });
+  });
+
+  it("R15 marks every site of an account near its limit", async () => {
+    const near = {
+      viewer: { accounts: [{ w20261029: [{ sum: { requests: 80_000 } }], d1: [], d1Storage: [], r2Storage: [], r2Ops: [] }] },
+    };
+    const base = fakeCloudflare();
+    const fake = {
+      ...base,
+      fetchFn: (async (url, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { query?: string };
+        if (body.query?.startsWith("query AccountUsage")) return Response.json({ data: near });
+        return base.fetchFn(url, init);
+      }) as typeof fetch,
+    };
+    const body = await json(await get(appWith(fake), "/api/panel"));
+    expect(body.cards.map((c: { nearLimit: boolean }) => c.nearLimit)).toEqual([true, true, true]);
+    expect(body.summary.nearLimit).toBe(3);
+  });
+
+  it("R16 has no figure for yesterday when Cloudflare does not answer, never 0", async () => {
+    const fake = fakeCloudflare({ graphql: () => new Response("down", { status: 503 }) });
+    const body = await json(await get(appWith(fake), "/api/panel"));
+    expect(body.summary.visitsYesterday).toBeNull();
+    expect(body.cards[0].summary).toEqual({ yesterday: null, dailyAverage: null, changePercent: null, total: null });
+    expect(body.notice).toBe(TEXT_NO_HISTORY);
+  });
+
+  it("is audited and stays within the subrequest budget", async () => {
+    const fake = fakeCloudflare();
+    await get(appWith(fake), "/api/panel");
+    expect(await auditRows()).toEqual([{ email: "owner@example.com", action: "view", target: "panel" }]);
+    expect(fake.calls.length).toBeLessThanOrEqual(9);
+    expect(fake.calls.filter((c) => c.op === "AccountUsage")).toHaveLength(3);
   });
 });
