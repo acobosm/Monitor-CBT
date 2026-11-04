@@ -23,5 +23,5 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done (green tests) · `[✓]
   Done 2026-11-04: the owner deployed from a normal terminal with the `monitor-cbt-deploy` token and checked at https://monitor.cobtec.net the usage bars, the daily charts with the "Límite" line and, on a real phone, every chart aligned in one column. The token was loaded with `read -s` and is not in the shell history or profile files; the deploy terminal closed abruptly, which also cleared the variable.
 
 ## Closing
-- [x] **T9. Documentation.** Update the documents affected by this spec. (Definition of Done)
+- [✓] **T9. Documentation.** Update the documents affected by this spec. (Definition of Done) Commit 55945b1.
   Done 2026-11-04: `docs/ARCHITECTURE.md` (overview of the new screens, chart days in the dashboard flow, the Worker-request rule rewritten in T3 and three new decisions), `docs/DATA_MODEL.md` (the same rule and the one-day-per-part reads) and `docs/DEVELOPMENT.md` (contents of `web/ui/`); `MEMORY.md` rewritten. No other document changed.

@@ -6,11 +6,10 @@ _Last updated: 2026-11-04_
 ## Where we are
 - Remotes: `ghp` = https://github.com/acobosm/Monitor-CBT.git, `glp` = https://gitlab.com/acobosm1/cbt-development/monitor-cbt.git (private).
 - Specs 001 and 003 complete. Spec 003 (charts and CBT design) deployed with the code of `1888fad` and checked by the owner in production, also on a real phone (2026-11-04). Production: https://monitor-cbt.acobos.workers.dev behind Access, reached through `monitor.cobtec.net`.
-- Branch `003-charts-and-design` not merged into `main` yet (`main` is at `a7da12c`, end of spec 001).
+- Branch `003-charts-and-design` merged into `main` by fast-forward (`55945b1`, 2026-11-04) and pushed to both remotes.
 
 ## Next step
-1. Merge `003-charts-and-design` into `main` (the owner runs the git commands).
-2. Write spec 002 (export: Excel reports per site for clients) in `specs/002-.../`, starting from `specs/000-template/`.
+1. Write spec 002 (export: Excel reports per site for clients) in `specs/002-.../`, starting from `specs/000-template/`.
 
 ## Known pending tasks
 - Deploy token `monitor-cbt-deploy` (COBTEC account only, Workers Scripts Edit + D1 Edit, in Bitwarden) expires 2026-11-30: the owner was to check in the Cloudflare panel whether it is still active and delete it if not needed; recreate one for later deploys and use it as the `CLOUDFLARE_API_TOKEN` variable (loaded with `read -s`) in a normal terminal.
