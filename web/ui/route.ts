@@ -1,9 +1,10 @@
 // Navigation with the browser's History API: pages are few and fixed, so no router dependency.
 import { useEffect, useState, type MouseEvent } from "react";
 
-export type Route = { page: "home" } | { page: "usage" } | { page: "site"; id: string };
+export type Route = { page: "home" } | { page: "panel" } | { page: "usage" } | { page: "site"; id: string };
 
 export function parseRoute(pathname: string): Route {
+  if (pathname === "/panel") return { page: "panel" };
   if (pathname === "/consumo") return { page: "usage" };
   const site = /^\/sitios\/([a-z0-9-]+)$/.exec(pathname);
   return site?.[1] ? { page: "site", id: site[1] } : { page: "home" };

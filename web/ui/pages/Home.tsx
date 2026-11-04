@@ -18,7 +18,7 @@ export function Home() {
         <p>{LANDING_TEXT}</p>
         <ul className="modules">
           <li>
-            <a className="button cta" href="/consumo" onClick={navigate}>
+            <a className="button cta" href="/panel" onClick={navigate}>
               {MODULE_NAME}
             </a>
           </li>

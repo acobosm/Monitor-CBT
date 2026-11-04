@@ -36,6 +36,9 @@ export function Layout({ route, notice, children }: { route: Route; notice: Reac
         <img className="logo-light" src={logo} alt="CBT" />
         <img className="logo-dark" src={logoInverse} alt="CBT" />
         <nav aria-label="Menú">
+          <MenuLink href="/panel" current={route.page === "panel"}>
+            Panel general
+          </MenuLink>
           <MenuLink href="/consumo" current={route.page === "usage"}>
             Consumo de planes
           </MenuLink>

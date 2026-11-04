@@ -39,8 +39,8 @@ Access protects the whole hostname, so the landing appears after the sign-in, no
 - R10. WHILE the device asks for reduced motion, the system SHALL show the node network still.
 - R11. The system SHALL show on the landing the module selector with the option "Cloudflare - Consumo y Tráfico", which leads to the general panel.
 - R12. The system SHALL add "Panel general" to the side menu.
-- R13. The system SHALL show at the top of the general panel a summary with yesterday's visits of all sites, labeled "Visitas ayer", the number of sites, labeled "Sitios", and how many have resources near the limit, labeled "Con recursos cerca del límite". "Yesterday" is the last complete day (19:00 to 19:00 ECT).
-- R14. The system SHALL show one card per site with its name, domain, yesterday's visits, the comparison with its daily average, the 30-day total, a small chart and the button "Ver detalle".
+- R13. The system SHALL show at the top of the general panel a summary with yesterday's visits of all sites, labeled "Visitas ayer", the number of sites, labeled "Sitios", and how many have resources near the limit, labeled "Con recursos cerca del límite". "Yesterday" is the last complete day (19:00 to 19:00 ECT). An (i) next to "Visitas ayer" SHALL say "Suma de las visitas de ayer de todos los sitios mostrados en el Panel general." (added on 2026-11-04 at the owner's request).
+- R14. The system SHALL show one card per site with its name, domain, yesterday's visits, the comparison with its daily average, the 30-day total, a small chart and the button "Ver detalle". An (i) next to "Total 30 días" SHALL say "Visitas de los últimos 30 días, incluido lo que va de hoy." (added on 2026-11-04 at the owner's request).
 - R15. IF the account of a site has a metric at "Cerca del límite" or worse, THEN the system SHALL show that word on the site's card; sites sharing an account show it on each card.
 - R16. IF a figure of a site is missing, THEN the system SHALL show "Sin dato" in it, never a 0 that looks real.
 

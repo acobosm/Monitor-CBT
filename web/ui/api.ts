@@ -76,6 +76,34 @@ export interface SiteData {
   topSecurityIps: IpRow[];
 }
 
+export interface DayPoint {
+  day: string;
+  value: number | null;
+  partial: boolean;
+}
+
+export interface SiteSummary {
+  yesterday: number | null;
+  dailyAverage: number | null;
+  changePercent: number | null;
+  total: number | null;
+}
+
+export interface PanelCard {
+  id: string;
+  name: string;
+  domain: string;
+  nearLimit: boolean;
+  summary: SiteSummary;
+  visits: DayPoint[];
+}
+
+export interface PanelData {
+  summary: { visitsYesterday: number | null; sites: number; nearLimit: number };
+  cards: PanelCard[];
+  notice: string | null;
+}
+
 export type ApiState<T> =
   | { kind: "loading" }
   | { kind: "ok"; data: T }

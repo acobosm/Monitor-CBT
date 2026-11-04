@@ -89,7 +89,7 @@ const token = (data: Partial<import("../../ui/api").TokenNoticeData>) =>
 describe("R36 home", () => {
   it("offers the single module, leading to the dashboard", () => {
     const out = html(<Home />);
-    expect(out).toContain(`href="/consumo"`);
+    expect(out).toContain(`href="/panel"`);
     expect(out).toContain(MODULE_NAME);
     expect(out.match(/<li>/g)).toHaveLength(1);
   });
@@ -135,6 +135,7 @@ describe("R40 Salir", () => {
 describe("routes", () => {
   it("reads the page from the path; anything else is home", () => {
     expect(parseRoute("/")).toEqual({ page: "home" });
+    expect(parseRoute("/panel")).toEqual({ page: "panel" });
     expect(parseRoute("/consumo")).toEqual({ page: "usage" });
     expect(parseRoute("/sitios/mohamed-boraei")).toEqual({ page: "site", id: "mohamed-boraei" });
     expect(parseRoute("/sitios/../x")).toEqual({ page: "home" });
