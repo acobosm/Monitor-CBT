@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useApi, type IpRow, type SiteData } from "../api";
+import { Card } from "../components/Card";
 import { DataTable, type Column } from "../components/DataTable";
+import { LineChart } from "../components/LineChart";
 import { Loaded } from "../components/Loaded";
 import { Notice } from "../components/Notice";
 import { countryFlag, formatBytes, formatDay, formatNumber, formatPercent, NO_VALUE } from "../format";
@@ -81,6 +83,11 @@ export function SiteView({ data, onSelectDay }: { data: SiteData; onSelectDay: (
       <h1>{data.name}</h1>
       {data.notice ? <Notice level="amber">{data.notice}</Notice> : null}
       <p className="note">{data.traffic.note}</p>
+      {/* R26: the chart of the daily visits, above the table with the same days. */}
+      <Card className="chart-card">
+        <h3>Visitas diarias</h3>
+        <LineChart points={data.visits} format={formatNumber} label={`Visitas diarias de ${data.name}, últimos 30 días`} />
+      </Card>
       <DataTable caption="Tráfico diario" columns={trafficColumns} rows={data.traffic.rows} rowKey={(r) => r.day} />
       {data.pageViewsNotice ? <p className="note">Páginas vistas: {data.pageViewsNotice}</p> : null}
 

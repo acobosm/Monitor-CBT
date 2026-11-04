@@ -30,11 +30,21 @@ export interface UsageRow {
   projection: string | null;
 }
 
+export interface UsageChart {
+  product: string;
+  metric: string;
+  label: string;
+  period: string;
+  limit: number;
+  points: DayPoint[];
+}
+
 export interface AccountUsage {
   id: string;
   name: string;
   live: boolean;
   rows: UsageRow[];
+  charts: UsageChart[];
   limitsCheckedText: string;
   unclassifiedText: string | null;
 }
@@ -67,6 +77,7 @@ export interface SiteData {
     note: string;
     rows: { day: string; label: string; partial: boolean; totals: TrafficTotals | null }[];
   };
+  visits: DayPoint[];
   pageViewsNotice: string | null;
   days: string[];
   selectedDay: string | null;

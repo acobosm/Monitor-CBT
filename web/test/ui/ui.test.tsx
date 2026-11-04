@@ -58,6 +58,7 @@ const account: AccountUsage = {
   rows: [row, storage],
   limitsCheckedText: "Límites verificados el 29 de octubre de 2026",
   unclassifiedText: null,
+  charts: [],
 };
 
 const usage = (a: Partial<AccountUsage> = {}, notice: string | null = null): UsageData => ({ accounts: [{ ...account, ...a }], notice });
@@ -66,6 +67,7 @@ const site: SiteData = {
   id: "soma",
   name: "SOMA",
   notice: null,
+  visits: [],
   traffic: {
     note: "Cada día va de 19:00 a 19:00 ECT.",
     rows: [

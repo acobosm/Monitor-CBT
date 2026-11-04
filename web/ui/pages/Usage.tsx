@@ -2,6 +2,7 @@ import { useApi, type AccountUsage, type UsageData, type UsageRow } from "../api
 import { Card } from "../components/Card";
 import { DataTable, type Column } from "../components/DataTable";
 import { InfoTip } from "../components/InfoTip";
+import { LineChart } from "../components/LineChart";
 import { Meter } from "../components/Meter";
 import { Loaded } from "../components/Loaded";
 import { Notice } from "../components/Notice";
@@ -97,6 +98,43 @@ function AccountCard({ account }: { account: AccountUsage }) {
   );
 }
 
+const chartKey = (c: { product: string; metric: string }) => `${c.product}:${c.metric}`;
+
+const chartFormat = (metric: string) => (value: number | null) => (metric.endsWith("_bytes") ? formatBytes(value) : formatNumber(value));
+
+function ChartsByMetric({ accounts, options }: { accounts: AccountUsage[]; options: { key: string; label: string }[] }) {
+  return (
+    <div className="usage-cards">
+      {options.map((o) => {
+        const chart = accounts[0]!.charts.find((c) => chartKey(c) === o.key)!;
+        const series = accounts.map((a) => ({ name: a.name, points: a.charts.find((c) => chartKey(c) === o.key)?.points ?? [] }));
+        return (
+          <Card key={o.key} className="chart-card">
+            <h3>{o.label}</h3>
+            <LineChart series={series} format={chartFormat(chart.metric)} limit={chart.limit} label={`${o.label} por cuenta, últimos 30 días`} />
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+/** R28–R34: one chart per metric, with a line per account (owner's choice A, 2026-11-04). */
+function UsageCharts({ accounts }: { accounts: AccountUsage[] }) {
+  const options = (accounts[0]?.charts ?? []).map((c) => {
+    const product = accounts[0]!.rows.find((r) => r.product === c.product)?.productLabel ?? c.product;
+    return { key: chartKey(c), label: `${product} · ${c.label}` };
+  });
+  if (!options.length) return null;
+
+  return (
+    <section>
+      <h2>Uso diario</h2>
+      <ChartsByMetric accounts={accounts} options={options} />
+    </section>
+  );
+}
+
 export function UsageView({ data }: { data: UsageData }) {
   return (
     <>
@@ -107,6 +145,7 @@ export function UsageView({ data }: { data: UsageData }) {
           <AccountCard key={account.id} account={account} />
         ))}
       </div>
+      <UsageCharts accounts={data.accounts} />
       {/* R22: the full tables stay below the cards. */}
       {data.accounts.map((account) => (
         <AccountTable key={account.id} account={account} />

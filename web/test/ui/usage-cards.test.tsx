@@ -64,6 +64,7 @@ const account = (change: Partial<AccountUsage> = {}): AccountUsage => ({
   rows: [requests, rowsRead, storage, noLimit],
   limitsCheckedText: "Límites verificados",
   unclassifiedText: null,
+  charts: [],
   ...change,
 });
 
@@ -139,6 +140,7 @@ const site: SiteData = {
   id: "soma",
   name: "SOMA",
   notice: null,
+  visits: [],
   traffic: { note: "", rows: [{ day: "2026-11-03", label: "03/11/2026", partial: false, totals: { requests: 10, visits: 2, pageViews: null, bytes: 100 } }] },
   pageViewsNotice: null,
   days: ["2026-11-03"],
