@@ -818,3 +818,109 @@ footer {
     transition: none !important;
   }
 }
+
+/* Phone (R36–R40): the menu moves to the top and everything flows in one column; only wide tables scroll sideways,
+   inside their own frame. */
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Logo and actions in the first row, the links below in rows that wrap. */
+  .side {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    align-items: center;
+    height: auto;
+    padding: var(--space-3) var(--space-4);
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .side img {
+    grid-row: 1;
+    grid-column: 1;
+    max-width: 112px;
+  }
+
+  .side-actions {
+    grid-row: 1;
+    grid-column: 2;
+    grid-auto-flow: column;
+    margin-top: 0;
+  }
+
+  nav {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  main {
+    padding: var(--space-4);
+  }
+
+  h1 {
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  .stats,
+  .site-cards,
+  .usage-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  footer {
+    padding: var(--space-4);
+  }
+
+  /* R40: the landing's logo, text and selector take the whole width, over the moving network. */
+  .landing main {
+    width: 100%;
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .landing h1 {
+    font-size: 26px;
+    line-height: 34px;
+  }
+
+  /* An (i) message opens as a strip at the bottom of the screen, so it never runs off the side. */
+  .info-tip [role="tooltip"] {
+    position: fixed;
+    top: auto;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    left: var(--space-4);
+    width: auto;
+    max-width: none;
+    transform: none;
+  }
+}
+
+/* R41: on touch screens links and buttons are at least 44 px tall; the small (i) keeps its look and gets a 44 px
+   touch area around it. */
+@media (pointer: coarse) {
+  nav a,
+  .button,
+  select {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .info-tip button {
+    position: relative;
+  }
+
+  .info-tip button::after {
+    position: absolute;
+    inset: -13px;
+    content: "";
+  }
+}

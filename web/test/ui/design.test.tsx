@@ -2,6 +2,7 @@ import { renderToStaticMarkup as html } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { pageTraces, sideTraces } from "../../ui/components/Circuit";
 import { FOOTER_TEXT, Layout } from "../../ui/components/Layout";
+import { tipShift } from "../../ui/components/LineChart";
 import { makeNodes, moveNodes, startNetwork, type NetworkWindow } from "../../ui/components/NodeNetwork";
 import { THEME_BUTTON_TEXT } from "../../ui/components/ThemeButton";
 import { Home, LANDING_TEXT, LANDING_TITLE, MODULE_NAME } from "../../ui/pages/Home";
@@ -194,5 +195,76 @@ describe("R11 module selector", () => {
     const out = html(<Home />);
     expect(out).toContain(MODULE_NAME);
     expect(out.match(/<li>/g)).toHaveLength(1);
+  });
+});
+
+/** The body of an at-rule, up to its matching brace. */
+function atRule(header: string): string {
+  const start = css.indexOf(`${header} {`);
+  if (start < 0) return "";
+  let depth = 0;
+  for (let i = css.indexOf("{", start); i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    if (css[i] === "}" && --depth === 0) return css.slice(start, i + 1);
+  }
+  return "";
+}
+
+/** The declarations of `selector` inside `block`. */
+function rule(block: string, selector: string): string {
+  const match = new RegExp(`(^|\\n)\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(block);
+  return match?.[2] ?? "";
+}
+
+const phone = atRule("@media (max-width: 860px)");
+
+describe("R36 menu on top", () => {
+  it("puts the menu above the content at 860 px or less, logo and links in rows", () => {
+    expect(rule(phone, ".app")).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(rule(phone, ".side")).toContain("position: static");
+    expect(rule(phone, ".side")).toContain("height: auto");
+    expect(rule(phone, "nav")).toContain("flex-wrap: wrap");
+  });
+});
+
+describe("R37 one column", () => {
+  it("shows cards and charts in a single column", () => {
+    expect(phone).toMatch(/\.stats,\s*\.site-cards,\s*\.usage-cards\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  });
+});
+
+describe("R38 no sideways scroll", () => {
+  it("lets no fixed width wider than 360 px push the page", () => {
+    const widths = [...css.matchAll(/(?<![-\w])(min-width|width):\s*(\d+)px/g)].map((m) => Number(m[2]));
+    expect(widths.every((w) => w <= 360)).toBe(true);
+  });
+
+  it("opens the (i) messages as a strip inside the screen, and keeps the chart readout inside the chart", () => {
+    const tip = rule(phone, '.info-tip [role="tooltip"]');
+    expect(tip).toContain("position: fixed");
+    expect(tip).toContain("left: var(--space-4)");
+    expect(tip).toContain("right: var(--space-4)");
+    expect([tipShift(0.1), tipShift(0.5), tipShift(0.9)]).toEqual(["none", "translateX(-50%)", "translateX(-100%)"]);
+  });
+});
+
+describe("R39 wide tables", () => {
+  it("scroll sideways inside their own frame", () => {
+    expect(rule(css, ".table-scroll")).toContain("overflow-x: auto");
+  });
+});
+
+describe("R40 landing on a phone", () => {
+  it("takes the whole width, with the network still moving", () => {
+    expect(rule(phone, ".landing main")).toContain("width: 100%");
+    expect(phone).not.toContain("node-network");
+  });
+});
+
+describe("R41 touch targets", () => {
+  it("makes links and buttons at least 44 px tall on touch screens, and the (i) 44 px to touch", () => {
+    const touch = atRule("@media (pointer: coarse)");
+    expect(touch).toMatch(/nav a,\s*\.button,\s*select\s*\{[^}]*min-height: 44px/);
+    expect(rule(touch, ".info-tip button::after")).toContain("inset: -13px");
   });
 });

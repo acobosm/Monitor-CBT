@@ -66,6 +66,11 @@ export function linePaths(points: DayPoint[], top: number, width = DEFAULT_WIDTH
 
 const valueText = (value: number | null, format: (value: number | null) => string) => (value === null ? TEXT_NO_DATA : format(value));
 
+/** The readout grows away from the nearer edge, so near either end it stays inside the chart (R38). */
+export function tipShift(share: number): string {
+  return share < 0.25 ? "none" : share > 0.75 ? "translateX(-100%)" : "translateX(-50%)";
+}
+
 /** R32: the readout of one day, in es-EC. */
 export function pointText(point: DayPoint, format: (value: number | null) => string): string {
   return `${point.partial ? TEXT_TODAY : formatDay(point.day)} · ${valueText(point.value, format)}`;
@@ -94,7 +99,7 @@ export function LineChart({ points, series, format, limit, label }: {
   useEffect(() => {
     const element = frame.current;
     if (!element || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => entry && setWidth(Math.max(320, Math.round(entry.contentRect.width))));
+    const observer = new ResizeObserver(([entry]) => entry && setWidth(Math.max(240, Math.round(entry.contentRect.width))));
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -191,7 +196,7 @@ export function LineChart({ points, series, format, limit, label }: {
           />
         </svg>
         {active !== null ? (
-          <div className="chart-tip" role="status" style={{ left: `${(at(active) / width) * 100}%` }}>
+          <div className="chart-tip" role="status" style={{ left: `${(at(active) / width) * 100}%`, transform: tipShift(at(active) / width) }}>
             {several ? (
               <>
                 <div>{days[active]!.partial ? TEXT_TODAY : formatDay(days[active]!.day)}</div>
