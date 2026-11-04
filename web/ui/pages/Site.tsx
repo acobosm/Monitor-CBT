@@ -6,12 +6,14 @@ import { Notice } from "../components/Notice";
 import { countryFlag, formatBytes, formatDay, formatNumber, formatPercent, NO_VALUE } from "../format";
 
 export const TEXT_NO_DAYS = "Aún no hay días guardados.";
+/** R25. */
+export const TEXT_SITE_REQUESTS_INFO = "Todas las peticiones de visitantes al sitio. No cuenta para el límite de Workers.";
 
 type TrafficRow = SiteData["traffic"]["rows"][number];
 
 const trafficColumns: Column<TrafficRow>[] = [
   { header: "Día", render: (r) => r.label },
-  { header: "Peticiones al sitio", numeric: true, render: (r) => formatNumber(r.totals?.requests) },
+  { header: "Peticiones al sitio", info: TEXT_SITE_REQUESTS_INFO, numeric: true, render: (r) => formatNumber(r.totals?.requests) },
   { header: "Visitas", numeric: true, render: (r) => formatNumber(r.totals?.visits) },
   { header: "Páginas vistas", numeric: true, render: (r) => formatNumber(r.totals?.pageViews) },
   { header: "Bytes", numeric: true, render: (r) => formatBytes(r.totals?.bytes) },
@@ -35,7 +37,7 @@ function Country({ code }: { code: string | null }) {
 
 const countryColumns: Column<SiteData["countries"][number]>[] = [
   { header: "País", render: (r) => <Country code={r.country} /> },
-  { header: "Peticiones al sitio", numeric: true, render: (r) => formatNumber(r.requests) },
+  { header: "Peticiones al sitio", info: TEXT_SITE_REQUESTS_INFO, numeric: true, render: (r) => formatNumber(r.requests) },
   { header: "% del total", numeric: true, render: (r) => formatPercent(r.percent) },
 ];
 
@@ -46,7 +48,7 @@ const lastSeenColumn: Column<IpRow> = { header: "Última hora (ECT)", render: (r
 const trafficIpColumns: Column<IpRow>[] = [
   ipColumn,
   countryColumn,
-  { header: "Peticiones al sitio", numeric: true, render: (r) => formatNumber(r.requests) },
+  { header: "Peticiones al sitio", info: TEXT_SITE_REQUESTS_INFO, numeric: true, render: (r) => formatNumber(r.requests) },
   lastSeenColumn,
 ];
 

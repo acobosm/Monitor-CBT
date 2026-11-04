@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
+import { InfoTip } from "./InfoTip";
 
 export interface Column<T> {
   header: string;
+  /** Message of an (i) next to the header (R23). */
+  info?: string;
   numeric?: boolean;
   render: (row: T) => ReactNode;
 }
@@ -27,6 +30,7 @@ export function DataTable<T>({ caption, columns, rows, rowKey }: { caption: stri
               {columns.map((c) => (
                 <th key={c.header} scope="col" className={c.numeric ? "numeric" : undefined}>
                   {c.header}
+                  {c.info ? <InfoTip text={c.info} /> : null}
                 </th>
               ))}
             </tr>

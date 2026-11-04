@@ -4,6 +4,8 @@ const oneDecimal = new Intl.NumberFormat("es-EC", { minimumFractionDigits: 1, ma
 const shortDate = new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
 
 export const NO_VALUE = "—";
+/** A figure that is missing, shown instead of a 0 that would look real. */
+export const TEXT_NO_DATA = "Sin dato";
 
 export function formatNumber(value: number | null | undefined): string {
   return value === null || value === undefined ? NO_VALUE : numbers.format(value);

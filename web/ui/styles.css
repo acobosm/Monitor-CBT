@@ -417,6 +417,9 @@ main {
   padding: var(--space-2) var(--space-3);
   font: 400 13px/20px var(--font-sans);
   color: var(--ink);
+  /* Table cells keep their text on one line; the message must wrap inside its bubble. */
+  text-align: left;
+  white-space: normal;
   background: var(--surface-200);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
@@ -495,6 +498,55 @@ main {
 
 .site-card .button {
   justify-self: start;
+}
+
+/* Plan usage cards (R17–R21). */
+.usage-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.usage-card {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.usage-card h2 {
+  margin: 0;
+}
+
+.meter-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.meter-label {
+  font: 600 13px/20px var(--font-sans);
+}
+
+.meter-track {
+  height: 8px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  background: var(--surface-300);
+  border-radius: var(--radius-sm);
+}
+
+.meter-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: var(--radius-sm);
+}
+
+.meter .note {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .table-scroll {
