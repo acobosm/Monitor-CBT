@@ -6,7 +6,7 @@ import { App } from "../../ui/App";
 import { Loaded, TEXT_API_FAILED } from "../../ui/components/Loaded";
 import { FOOTER_TEXT, Layout, MENU_SITES } from "../../ui/components/Layout";
 import { TEXT_TOKEN_UNVERIFIED, TokenNoticeView } from "../../ui/components/TokenNotice";
-import { formatBytes, formatNumber, formatPercent } from "../../ui/format";
+import { countryFlag, formatBytes, formatNumber, formatPercent } from "../../ui/format";
 import { Home, MODULE_NAME } from "../../ui/pages/Home";
 import { SiteView, TEXT_NO_DAYS } from "../../ui/pages/Site";
 import { TEXT_NO_DATA, UsageView } from "../../ui/pages/Usage";
@@ -274,5 +274,20 @@ describe("R21–R27 site", () => {
 
   it("R35 shows the notice over the history", () => {
     expect(siteHtml({ notice: "No pudimos leer los datos recientes de Cloudflare." })).toContain("No pudimos leer");
+  });
+});
+
+describe("R42 country flags", () => {
+  it("makes the flag of a country code, and none for what is not a country", () => {
+    expect(countryFlag("US")).toBe("🇺🇸");
+    expect(countryFlag("EC")).toBe("🇪🇨");
+    for (const code of ["XX", "T1", "", "usa", "us"]) expect(countryFlag(code)).toBeNull();
+  });
+
+  it("shows the flag before the code in the three tables, keeping the code", () => {
+    const out = siteHtml({ countries: [{ country: "EC", requests: 3000, percent: 75 }, { country: "T1", requests: 1000, percent: 25 }] });
+    expect(out.match(/<span class="flag" aria-hidden="true">🇪🇨<\/span>EC</g)).toHaveLength(2);
+    expect(out).toContain(`<span class="flag" aria-hidden="true">🇺🇸</span>US<`);
+    expect(out).toContain(`<td>T1</td>`);
   });
 });

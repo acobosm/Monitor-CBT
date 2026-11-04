@@ -3,7 +3,7 @@ import { useApi, type IpRow, type SiteData } from "../api";
 import { DataTable, type Column } from "../components/DataTable";
 import { Loaded } from "../components/Loaded";
 import { Notice } from "../components/Notice";
-import { formatBytes, formatDay, formatNumber, formatPercent, NO_VALUE } from "../format";
+import { countryFlag, formatBytes, formatDay, formatNumber, formatPercent, NO_VALUE } from "../format";
 
 export const TEXT_NO_DAYS = "Aún no hay días guardados.";
 
@@ -17,14 +17,30 @@ const trafficColumns: Column<TrafficRow>[] = [
   { header: "Bytes", numeric: true, render: (r) => formatBytes(r.totals?.bytes) },
 ];
 
+/** R42: the flag goes before the code, which always stays; screen readers read only the code. */
+function Country({ code }: { code: string | null }) {
+  if (code === null) return <>{NO_VALUE}</>;
+  const flag = countryFlag(code);
+  return (
+    <>
+      {flag ? (
+        <span className="flag" aria-hidden="true">
+          {flag}
+        </span>
+      ) : null}
+      {code}
+    </>
+  );
+}
+
 const countryColumns: Column<SiteData["countries"][number]>[] = [
-  { header: "País", render: (r) => r.country },
+  { header: "País", render: (r) => <Country code={r.country} /> },
   { header: "Peticiones al sitio", numeric: true, render: (r) => formatNumber(r.requests) },
   { header: "% del total", numeric: true, render: (r) => formatPercent(r.percent) },
 ];
 
 const ipColumn: Column<IpRow> = { header: "IP", render: (r) => <span className="mono">{r.ip}</span> };
-const countryColumn: Column<IpRow> = { header: "País", render: (r) => r.country ?? NO_VALUE };
+const countryColumn: Column<IpRow> = { header: "País", render: (r) => <Country code={r.country} /> };
 const lastSeenColumn: Column<IpRow> = { header: "Última hora (ECT)", render: (r) => r.lastSeen ?? NO_VALUE };
 
 const trafficIpColumns: Column<IpRow>[] = [

@@ -75,6 +75,9 @@ Access protects the whole hostname, so the landing appears after the sign-in, no
 - R40. WHILE the screen is narrow, the landing SHALL show the logo, text and module selector complete in a single column, with the animation still active.
 - R41. Links and buttons SHALL be at least 44 px tall on touch screens.
 
+### Added during implementation
+- R42. The system SHALL show the country's flag emoji before its code in "Países", "IPs con más tráfico" and "IPs con más eventos de seguridad", keeping the code; a code that is not a country (such as "T1" or "XX") SHALL keep only the code. (added on 2026-11-04 at the owner's request; where the device has no flag emoji, it shows two small letters instead)
+
 ## Definition of Done
 <!-- UNIVERSAL -->
 - Automated tests for every requirement that can be tested automatically (list: R1–R41). Tests render to text and have no real layout or motion, so for R2, R3, R9 and R36–R41 they check the styles and markup, and the owner checks the real look in the browser.

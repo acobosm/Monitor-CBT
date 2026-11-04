@@ -25,6 +25,15 @@ export function formatPercent(value: number): string {
   return `${oneDecimal.format(value)} %`;
 }
 
+/** Codes Cloudflare uses for what is not a country: unknown and Tor. */
+const NOT_COUNTRIES = new Set(["XX", "T1"]);
+
+/** R42: the flag emoji of a two-letter country code, made of its two regional indicator letters; null for any other code. */
+export function countryFlag(code: string): string | null {
+  if (!/^[A-Z]{2}$/.test(code) || NOT_COUNTRIES.has(code)) return null;
+  return String.fromCodePoint(...[...code].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65));
+}
+
 /** Stored days are UTC days named by date only, so they are shown as they are. */
 export function formatDay(day: string): string {
   return shortDate.format(new Date(`${day}T00:00:00Z`));
