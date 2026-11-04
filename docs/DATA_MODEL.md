@@ -148,7 +148,8 @@ enabled on the Free plan for the 3 accounts and 3 zones.
 - `firewallEventsAdaptiveGroups` is **disabled** on Free; `firewallEventsAdaptive` (raw events) is enabled
   but not used, because grouped requests give the same counts and are not cut at 10,000 rows.
 - Adaptive datasets are sampled (`avg.sampleInterval`); counts are estimates under high traffic, exact only at interval 1.
-- `workersInvocationsAdaptive`: a range that includes a day about 30 days old is sampled coarsely as a whole (interval 11 to 48, against 1 to 5 otherwise; measured 2026-10-31, the exact age limit is not documented). So the dashboard reads Worker requests from the last 8 days only and recovery stops at 29 days back (P11). D1 and R2 figures did not change.
+- `workersInvocationsAdaptive`: a range that includes a day about 30 days old is sampled coarsely as a whole (interval 11 to 48, against 1 to 5 otherwise; measured 2026-10-31, the exact age limit is not documented). So Worker requests are never read from a day that began 29.5 days ago or more, and recovery stops at 29 days back (P11; R43 of spec 001, rewritten by spec 003). D1 and R2 figures did not change.
+- Daily visits and Worker requests for the charts are read one day per part of a single query (GraphQL aliases): a 29-day range comes back with 25 of 29 days rounded to tens, while one day per part gives the exact per-day figures (measured 2026-11-02, spec 003 T3).
 - "History" is counted back from the query time, so recovery covers 29 complete days (P6, P11).
 - History in D1 starts on the first run of the daily task: the past that Cloudflare still keeps is not copied (P9).
 - Account datasets keep 90 days, more than the 29-day backfill.

@@ -8,7 +8,7 @@
 | `specs/` | One directory per feature (SDD): `spec.md`, `plan.md`, `tasks.md`. |
 | `web/` | All the code. `npm` and `wrangler` commands run here. |
 | `web/src/` | The Worker: API (Hono), daily task, GraphQL client, Access validation. |
-| `web/ui/` | React UI (the CBT design goes here). |
+| `web/ui/` | React UI with the CBT design: `pages/` (landing, panel, usage, site), `components/` (charts, meters, tables, info tips), `assets/` (CBT logos, copied from the design system, never redrawn), `styles.css` (tokens, themes, phone rules), `theme.ts`. |
 | `web/config/` | `sites.json` (monitored sites) and `limits.json` (plan limits). |
 | `web/migrations/statistics/` | Migrations of `monitor-cbt-statistics-db`. |
 | `web/migrations/audit/` | Migrations of `monitor-cbt-audit-db`. |
