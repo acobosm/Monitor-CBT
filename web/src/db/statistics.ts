@@ -234,3 +234,96 @@ export async function zoneDatasets(db: D1Database, zoneTag: string): Promise<Rec
     .all<{ dataset: string; enabled: number }>();
   return Object.fromEntries(results.map((r) => [r.dataset, r.enabled === 1]));
 }
+
+/** CPU of one Worker script on one day (spec 004). Times in milliseconds; null when Cloudflare gave none. */
+export interface ScriptCpu {
+  /** `scriptName`; `__unknown__` when Cloudflare gives none. */
+  script: string;
+  requests: number;
+  errors: number;
+  /** Requests whose status was `exceededResources` (R2). */
+  exceededResources: number;
+  cpuP50Ms: number | null;
+  cpuP99Ms: number | null;
+  cpuP999Ms: number | null;
+  wallP50Ms: number | null;
+  wallP99Ms: number | null;
+  /** 1 = exact; above 1 = estimated from a sample. */
+  sampleInterval: number | null;
+}
+
+/**
+ * Replaces several CPU days of one account in one batch (R5) and marks each one as processed, so a day with
+ * no invocations is not read again.
+ */
+export async function saveCpuDays(
+  db: D1Database,
+  accountId: string,
+  days: Record<string, ScriptCpu[]>,
+  fetchedAt = new Date(),
+): Promise<void> {
+  const at = fetchedAt.toISOString();
+  const insert = db.prepare(
+    `INSERT INTO workers_cpu_daily (day, account_id, script, requests, errors, exceeded_resources, cpu_p50_ms, cpu_p99_ms,
+       cpu_p999_ms, wall_p50_ms, wall_p99_ms, sample_interval, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const check = db.prepare(
+    `INSERT INTO workers_cpu_checked (day, account_id, fetched_at) VALUES (?, ?, ?)
+     ON CONFLICT (day, account_id) DO UPDATE SET fetched_at = excluded.fetched_at`,
+  );
+  const statements = Object.entries(days).flatMap(([day, scripts]) => [
+    db.prepare("DELETE FROM workers_cpu_daily WHERE day = ? AND account_id = ?").bind(day, accountId),
+    ...scripts.map((s) =>
+      insert.bind(day, accountId, s.script, s.requests, s.errors, s.exceededResources, s.cpuP50Ms, s.cpuP99Ms, s.cpuP999Ms, s.wallP50Ms, s.wallP99Ms, s.sampleInterval, at),
+    ),
+    check.bind(day, accountId, at),
+  ]);
+  if (statements.length) await db.batch(statements);
+}
+
+/** Processed CPU days of every account from `fromDay` on, oldest first (R6). */
+export async function storedCpuDays(db: D1Database, fromDay: string): Promise<Record<string, string[]>> {
+  const { results } = await db
+    .prepare("SELECT account_id AS id, day FROM workers_cpu_checked WHERE day >= ? ORDER BY day")
+    .bind(fromDay)
+    .all<{ id: string; day: string }>();
+  return group(results);
+}
+
+/**
+ * CPU of every account per day from `fromDay` on. A processed day with no invocations is present with no
+ * scripts; a day never processed is absent, so it shows "Sin dato" and never a 0 (R21).
+ */
+export async function readCpu(db: D1Database, fromDay: string): Promise<Record<string, Record<string, ScriptCpu[]>>> {
+  const [checked, rows] = await db.batch<Record<string, unknown>>([
+    db.prepare("SELECT account_id, day FROM workers_cpu_checked WHERE day >= ?").bind(fromDay),
+    db
+      .prepare(
+        `SELECT account_id, day, script, requests, errors, exceeded_resources, cpu_p50_ms, cpu_p99_ms, cpu_p999_ms,
+           wall_p50_ms, wall_p99_ms, sample_interval FROM workers_cpu_daily WHERE day >= ? ORDER BY script`,
+      )
+      .bind(fromDay),
+  ]);
+  const out: Record<string, Record<string, ScriptCpu[]>> = {};
+  for (const r of (checked?.results ?? []) as unknown as { account_id: string; day: string }[]) (out[r.account_id] ??= {})[r.day] ??= [];
+  type Row = { account_id: string; day: string; script: string; requests: number; errors: number; exceeded_resources: number } & Record<
+    "cpu_p50_ms" | "cpu_p99_ms" | "cpu_p999_ms" | "wall_p50_ms" | "wall_p99_ms" | "sample_interval",
+    number | null
+  >;
+  for (const r of (rows?.results ?? []) as unknown as Row[]) {
+    const days = (out[r.account_id] ??= {});
+    (days[r.day] ??= []).push({
+      script: r.script,
+      requests: r.requests,
+      errors: r.errors,
+      exceededResources: r.exceeded_resources,
+      cpuP50Ms: r.cpu_p50_ms,
+      cpuP99Ms: r.cpu_p99_ms,
+      cpuP999Ms: r.cpu_p999_ms,
+      wallP50Ms: r.wall_p50_ms,
+      wallP99Ms: r.wall_p99_ms,
+      sampleInterval: r.sample_interval,
+    });
+  }
+  return out;
+}

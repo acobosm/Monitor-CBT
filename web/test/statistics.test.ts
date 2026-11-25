@@ -6,8 +6,12 @@ import {
   saveDatasetAvailability,
   saveSiteDay,
   saveAccountDays,
+  saveCpuDays,
+  readCpu,
+  storedCpuDays,
   storedDays,
   type IpCount,
+  type ScriptCpu,
   type SiteDay,
 } from "../src/db/statistics";
 
@@ -44,7 +48,7 @@ async function count(table: string): Promise<number> {
 
 beforeEach(async () => {
   await db.batch(
-    ["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability"].map((t) => db.prepare(`DELETE FROM ${t}`)),
+    ["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability", "workers_cpu_daily", "workers_cpu_checked"].map((t) => db.prepare(`DELETE FROM ${t}`)),
   );
 });
 
@@ -181,5 +185,75 @@ describe("R41 dataset availability", () => {
     expect((await db.prepare("SELECT enabled, not_older_than_s FROM dataset_availability").all()).results).toEqual([
       { enabled: 0, not_older_than_s: 2678400 },
     ]);
+  });
+});
+
+describe("spec 004 R5 Workers CPU per day, account and script", () => {
+  const BORAEI = "31767db4f7f58a6651b7a284e211be81";
+  const SOMA = "b74a9056b9ae179a543449713d41020d";
+  const script = (overrides: Partial<ScriptCpu> = {}): ScriptCpu => ({
+    script: "mohamed-boraei",
+    requests: 2600,
+    errors: 0,
+    exceededResources: 0,
+    cpuP50Ms: 1.167,
+    cpuP99Ms: 69.244,
+    cpuP999Ms: 123.157,
+    wallP50Ms: 2.159,
+    wallP99Ms: 91.87,
+    sampleInterval: 1.7,
+    ...overrides,
+  });
+
+  it("stores one row per script, including __unknown__ with empty quantiles, and keeps the decimals", async () => {
+    await saveCpuDays(db, BORAEI, {
+      [DAY]: [script(), script({ script: "__unknown__", requests: 103, errors: 103, exceededResources: 103, cpuP50Ms: null, cpuP99Ms: null, cpuP999Ms: null, wallP50Ms: null, wallP99Ms: null, sampleInterval: null })],
+    });
+
+    const stored = await readCpu(db, DAY);
+    expect(stored[BORAEI]?.[DAY]).toEqual([
+      script({ script: "__unknown__", requests: 103, errors: 103, exceededResources: 103, cpuP50Ms: null, cpuP99Ms: null, cpuP999Ms: null, wallP50Ms: null, wallP99Ms: null, sampleInterval: null }),
+      script(),
+    ]);
+  });
+
+  it("processing a day again replaces its scripts without duplicates", async () => {
+    await saveCpuDays(db, BORAEI, { [DAY]: [script(), script({ script: "__unknown__", exceededResources: 5 })] });
+    await saveCpuDays(db, BORAEI, { [DAY]: [script({ requests: 3000, cpuP99Ms: 12.5 })] });
+
+    expect(await count("workers_cpu_daily")).toBe(1);
+    expect(await count("workers_cpu_checked")).toBe(1);
+    expect((await readCpu(db, DAY))[BORAEI]?.[DAY]).toEqual([script({ requests: 3000, cpuP99Ms: 12.5 })]);
+  });
+
+  it("keeps the days of other accounts and other days untouched", async () => {
+    await saveCpuDays(db, SOMA, { [DAY]: [script({ script: "soma-web" })] });
+    await saveCpuDays(db, BORAEI, { [DAY]: [script()], "2026-10-29": [script()] });
+    await saveCpuDays(db, BORAEI, { [DAY]: [] });
+
+    const stored = await readCpu(db, DAY);
+    expect(stored[SOMA]?.[DAY]).toEqual([script({ script: "soma-web" })]);
+    expect(stored[BORAEI]?.[DAY]).toEqual([]);
+    expect(stored[BORAEI]?.["2026-10-29"]).toEqual([script()]);
+  });
+
+  it("R21 a processed day without invocations is present and empty; a day never processed is absent", async () => {
+    await saveCpuDays(db, SOMA, { [DAY]: [] });
+
+    const stored = await readCpu(db, "2026-10-01");
+    expect(stored[SOMA]).toEqual({ [DAY]: [] });
+    expect(stored[BORAEI]).toBeUndefined();
+  });
+
+  it("R6 lists the processed days of each account from a given day, oldest first", async () => {
+    await saveCpuDays(db, BORAEI, { "2026-10-30": [], [DAY]: [script()], "2026-10-20": [] });
+    await saveCpuDays(db, SOMA, { "2026-10-29": [script({ script: "soma-web" })] });
+
+    expect(await storedCpuDays(db, "2026-10-25")).toEqual({ [BORAEI]: [DAY, "2026-10-30"], [SOMA]: ["2026-10-29"] });
+  });
+
+  it("refuses negative counts and times", async () => {
+    await expect(saveCpuDays(db, BORAEI, { [DAY]: [script({ cpuP99Ms: -1 })] })).rejects.toThrow();
+    expect(await count("workers_cpu_checked")).toBe(0);
   });
 });
