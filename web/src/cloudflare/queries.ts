@@ -16,7 +16,41 @@ export function dayAlias(prefix: "w" | "v" | "c" | "x", day: string): string {
   return `${prefix}${checkedDay(day).replaceAll("-", "")}`;
 }
 
+const oneDay = (day: string) => `filter: { date_geq: "${checkedDay(day)}", date_leq: "${day}" }`;
+
 const CPU_QUANTILES = "cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99";
+
+/**
+ * Most CPU days per query: 2 parts each, 28 in all. Cloudflare refused a query of about 63 parts ("too many
+ * nodes") in the local test of 2026-11-25 and documents no number; queries of up to about 34 parts work.
+ */
+export const CPU_DAYS_PER_QUERY = 14;
+
+/**
+ * Workers CPU of one account (spec 004, R1–R3): per day, the CPU of each script (`c<day>`) and its invocations
+ * by status (`x<day>`) to count `exceededResources`. A query of its own, so a failure never takes the plan
+ * usage with it. Fields and status values confirmed by the discovery of 2026-11-24; times in microseconds.
+ */
+export function accountCpuQuery(days: string[]): string {
+  if (days.length > CPU_DAYS_PER_QUERY) throw new Error(`At most ${CPU_DAYS_PER_QUERY} CPU days per query`);
+  const parts = days.flatMap((day) => [
+    `${dayAlias("c", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests errors } quantiles { ${CPU_QUANTILES} } avg { sampleInterval } dimensions { scriptName } }`,
+    `${dayAlias("x", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests } dimensions { scriptName status } }`,
+  ]);
+  return `query AccountCpu($tag: string!) {
+  viewer {
+    accounts(filter: { accountTag: $tag }) {
+      ${parts.join("\n      ")}
+    }
+  }
+}`;
+}
+
+export interface AccountCpuData {
+  viewer: {
+    accounts: ({ [alias: `c${number}`]: CpuPartRow[] | undefined } & { [alias: `x${number}`]: StatusPartRow[] | undefined })[];
+  };
+}
 
 /** CPU of each script on one day (`c<day>`); quantiles in microseconds, null when Cloudflare gives none. */
 export interface CpuPartRow {
@@ -37,17 +71,10 @@ export interface StatusPartRow {
  * account covers the whole window plus today. Worker requests are read one day per part of the query:
  * a range reaching a day about 30 days old is sampled coarsely as a whole, a single day is not (P11, R43).
  */
-export function accountUsageQuery(workerDays: string[], cpuDays: string[] = []): string {
-  const oneDay = (day: string) => `filter: { date_geq: "${day}", date_leq: "${day}" }`;
-  const workers = [
-    ...workerDays.map((day) => `${dayAlias("w", day)}: workersInvocationsAdaptive(limit: 1, ${oneDay(day)}) { sum { requests } }`),
-    // Spec 004: CPU per script, and invocations per script and status to count `exceededResources` (R1–R3).
-    // Fields and status values confirmed by the discovery of 2026-11-24; times come in microseconds.
-    ...cpuDays.flatMap((day) => [
-      `${dayAlias("c", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests errors } quantiles { ${CPU_QUANTILES} } avg { sampleInterval } dimensions { scriptName } }`,
-      `${dayAlias("x", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests } dimensions { scriptName status } }`,
-    ]),
-  ].join("\n      ");
+export function accountUsageQuery(workerDays: string[]): string {
+  const workers = workerDays
+    .map((day) => `${dayAlias("w", day)}: workersInvocationsAdaptive(limit: 1, ${oneDay(day)}) { sum { requests } }`)
+    .join("\n      ");
   return `query AccountUsage($tag: string!, $from: Date!, $to: Date!) {
   viewer {
     accounts(filter: { accountTag: $tag }) {
@@ -80,9 +107,7 @@ export interface AccountUsageData {
       d1Storage: { max: { databaseSizeBytes: number }; dimensions: { date: string; databaseId: string } }[];
       r2Ops: { sum: { requests: number }; dimensions: { date: string; actionType: string } }[];
       r2Storage: { max: { payloadSize: number; metadataSize: number }; dimensions: { date: string; bucketName: string } }[];
-    } & { [alias: `w${number}`]: { sum: { requests: number } }[] | undefined } & {
-      [alias: `c${number}`]: CpuPartRow[] | undefined;
-    } & { [alias: `x${number}`]: StatusPartRow[] | undefined })[];
+    } & { [alias: `w${number}`]: { sum: { requests: number } }[] | undefined })[];
   };
 }
 

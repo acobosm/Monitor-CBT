@@ -14,7 +14,7 @@ As in specs 001 and 003: parsing, µs to ms conversion, script-to-site mapping a
 ## Modified files
 | File | Change |
 |---|---|
-| `web/src/cloudflare/queries.ts` | `accountUsageQuery` takes a second list, the CPU days, and adds per day `c<day>` (by `scriptName`: `sum { requests errors }`, `quantiles { cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99 }`, `avg { sampleInterval }`) and `x<day>` (by `scriptName` and `status`: `sum { requests }`; the parser keeps `exceededResources`, because filtering by `status` was not confirmed by the discovery). The `w<day>` parts stay as they are, so the precision measured in P11 does not change. |
+| `web/src/cloudflare/queries.ts` | `accountCpuQuery` (its own query, at most 14 days) reads per day `c<day>` (by `scriptName`: `sum { requests errors }`, `quantiles { cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99 }`, `avg { sampleInterval }`) and `x<day>` (by `scriptName` and `status`: `sum { requests }`; the parser keeps `exceededResources`, because filtering by `status` was not confirmed by the discovery). The `w<day>` parts stay as they are, so the precision measured in P11 does not change. |
 | `web/src/db/statistics.ts` | `saveCpuDays` (one D1 batch: delete and insert the day's rows, plus the `checked` mark), `storedCpuDays`, `readCpu`. |
 | `web/src/cron.ts` | CPU days per account: days of the last 29 missing from `workers_cpu_checked`, plus yesterday, limited by `workerDays` (P11). They are independent of the usage days, so the D1/R2 range does not grow. |
 | `web/config/sites.json` | `scripts` per site: soma `["soma-web"]`, boraei `[]`, mohamed-boraei `["mohamed-boraei", "__unknown__"]`. |
@@ -63,7 +63,7 @@ CREATE TABLE workers_cpu_checked (
 - A site's page only receives the scripts listed for it in `sites.json` (R9); staging scripts and `__unknown__` not assigned stay in "Consumo de planes", which only the owner sees.
 
 ## Risks
-- **Query size:** the first run adds about 58 parts (29 days × 2) to each account's query. If Cloudflare rejects it (complexity or time), the CPU goes to its own query per account: 3 more subrequests, within the 50 per invocation.
+- **Query size:** happened in the local test of 2026-11-25: about 63 parts in one account query were refused ("too many nodes"). The CPU now goes in its own query per account, at most 14 days (28 parts), filling the 29 days in three runs; `GAP_SITE_DAYS_PER_RUN` goes from 8 to 7 so the worst case stays at 47 of 50 subrequests. The live read of today in `/api/usage` (T5) also uses its own query.
 - **Sampling:** the percentiles are estimates when `sampleInterval` is above 1 (SOMA had 2.5 over the week). The (i) of the CPU card says so.
 - **`__unknown__` mapping:** right only while `mohamed-boraei` is the only Worker with code in the BORAEI account (P2).
 - **Chart colors:** a fourth color must pass contrast and color-blindness checks in both themes, as the three in T6 of spec 003.

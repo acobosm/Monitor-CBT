@@ -1,6 +1,6 @@
-// Workers CPU per request (spec 004): parse the `c<day>` and `x<day>` parts of the account query into one
+// Workers CPU per request (spec 004): parse the `c<day>` and `x<day>` parts of the account CPU query into one
 // figure per script and day. Pure: the daily task and the routes only store or show what this returns.
-import { dayAlias, type AccountUsageData, type CpuPartRow, type StatusPartRow } from "../cloudflare/queries";
+import { dayAlias, type AccountCpuData, type CpuPartRow, type StatusPartRow } from "../cloudflare/queries";
 import type { ScriptCpu } from "../db/statistics";
 
 /** Status of the invocations Cloudflare cut for exceeding resources (discovery of 2026-11-24). */
@@ -20,7 +20,7 @@ const scriptOf = (name: string | null | undefined) => name || UNKNOWN_SCRIPT;
  * so a day Cloudflare did not answer is never stored as processed. A script seen only among the cut
  * invocations (as `__unknown__`) gets its counts and no quantiles.
  */
-export function parseCpu(data: AccountUsageData, days: string[]): Record<string, ScriptCpu[]> {
+export function parseCpu(data: AccountCpuData, days: string[]): Record<string, ScriptCpu[]> {
   const account = (data.viewer.accounts[0] ?? {}) as Record<string, unknown>;
   const out: Record<string, ScriptCpu[]> = {};
 

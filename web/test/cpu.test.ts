@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { accountUsageQuery, dayAlias, type AccountUsageData } from "../src/cloudflare/queries";
+import { accountCpuQuery, accountUsageQuery, CPU_DAYS_PER_QUERY, dayAlias, type AccountCpuData } from "../src/cloudflare/queries";
 import { EXCEEDED_STATUS, parseCpu, UNKNOWN_SCRIPT, usToMs } from "../src/logic/cpu";
 import fixture from "./fixtures/account-cpu.json";
 
 // Dummy figures shaped like the discovery of 2026-11-24 (BORAEI account); the API is never called.
-const data = fixture as unknown as AccountUsageData;
+const data = fixture as unknown as AccountCpuData;
 
-describe("spec 004 R1–R3 CPU parts of the account query", () => {
-  const query = accountUsageQuery(["2026-11-23"], ["2026-11-23", "2026-11-24"]);
+describe("spec 004 R1–R3 CPU query of an account", () => {
+  const query = accountCpuQuery(["2026-11-23", "2026-11-24"]);
 
   it("adds one CPU part and one status part per CPU day", () => {
     for (const day of ["2026-11-23", "2026-11-24"]) {
@@ -21,15 +21,22 @@ describe("spec 004 R1–R3 CPU parts of the account query", () => {
     expect(query).toContain("sum { requests } dimensions { scriptName status }");
   });
 
-  it("keeps the Worker request parts as they were, and adds no CPU part without CPU days", () => {
-    expect(query).toContain(`${dayAlias("w", "2026-11-23")}: workersInvocationsAdaptive(limit: 1, filter: { date_geq: "2026-11-23", date_leq: "2026-11-23" }) { sum { requests } }`);
-    const withoutCpu = accountUsageQuery(["2026-11-23"]);
-    expect(withoutCpu).not.toContain("quantiles");
-    expect(withoutCpu).not.toMatch(/\b[cx]20261123:/);
+  it("is a query of its own: the plan usage query has no CPU part and keeps its Worker request parts", () => {
+    expect(query).toMatch(/^query AccountCpu\(\$tag: string!\)/);
+    const usage = accountUsageQuery(["2026-11-23"]);
+    expect(usage).toContain(`${dayAlias("w", "2026-11-23")}: workersInvocationsAdaptive(limit: 1, filter: { date_geq: "2026-11-23", date_leq: "2026-11-23" }) { sum { requests } }`);
+    expect(usage).not.toContain("quantiles");
+    expect(usage).not.toMatch(/\b[cx]20261123:/);
+  });
+
+  it("asks for at most 14 days (28 parts), below the size Cloudflare refused", () => {
+    const days = Array.from({ length: CPU_DAYS_PER_QUERY }, (_, i) => `2026-11-${String(i + 1).padStart(2, "0")}`);
+    expect(accountCpuQuery(days).match(/workersInvocationsAdaptive/g)).toHaveLength(28);
+    expect(() => accountCpuQuery([...days, "2026-11-15"])).toThrow("At most 14 CPU days per query");
   });
 
   it("refuses a day that is not YYYY-MM-DD", () => {
-    expect(() => accountUsageQuery([], ['2026-11-23" } } evil'])).toThrow("Invalid day");
+    expect(() => accountCpuQuery(['2026-11-23" } } evil'])).toThrow("Invalid day");
   });
 });
 
@@ -98,6 +105,6 @@ describe("spec 004 R1, R2, R5 parsing the CPU parts", () => {
   });
 
   it("returns nothing for an account Cloudflare did not return", () => {
-    expect(parseCpu({ viewer: { accounts: [] } } as unknown as AccountUsageData, ["2026-11-23"])).toEqual({});
+    expect(parseCpu({ viewer: { accounts: [] } } as unknown as AccountCpuData, ["2026-11-23"])).toEqual({});
   });
 });

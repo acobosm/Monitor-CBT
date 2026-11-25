@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sitesJson from "../config/sites.json";
 import { ACCOUNT_DATASETS, ZONE_DATASETS } from "../src/cloudflare/queries";
-import { GAP_SITE_DAYS_PER_RUN, runDailyTask } from "../src/cron";
+import { cpuDaysToRead, GAP_SITE_DAYS_PER_RUN, runDailyTask } from "../src/cron";
 import { saveAccountDay, saveSiteDay, type SiteDay } from "../src/db/statistics";
 import worker from "../src/index";
 import accountFixture from "./fixtures/account-usage.json";
@@ -32,6 +32,8 @@ interface FakeOptions {
   cpuP99Us?: number;
   /** Spec 004: CPU days (YYYYMMDD) whose status part Cloudflare leaves out of the answer. */
   dropStatus?: string[];
+  /** Spec 004: account whose CPU query Cloudflare refuses. */
+  failCpu?: string;
 }
 
 /** Spec 004: one dummy script per `c<day>` and `x<day>` part the query asks for, 2 of its requests cut. */
@@ -64,10 +66,11 @@ function fakeCloudflare(options: FakeOptions = {}) {
     const op = /query (\w+)/.exec(body.query)?.[1] ?? "unknown";
     calls.push({ op, query: body.query, variables: body.variables });
     if (op === "Settings") return Response.json({ data: settingsData });
-    if (op === "AccountUsage") {
+    if (op === "AccountUsage" || op === "AccountCpu") {
       if (body.variables.tag === options.failAccount) return new Response("unavailable", { status: 503 });
-      const account = { ...accountFixture.viewer.accounts[0], ...cpuParts(body.query, options) };
-      return Response.json({ data: { viewer: { accounts: [account] } } });
+      if (op === "AccountUsage") return Response.json({ data: accountFixture });
+      if (body.variables.tag === options.failCpu) return Response.json({ data: null, errors: [{ message: "too many nodes" }] });
+      return Response.json({ data: { viewer: { accounts: [cpuParts(body.query, options)] } } });
     }
     if (op === "SiteDay") {
       if (body.variables.tag === options.failZone) return Response.json({ data: null, errors: [{ message: "zone error" }] });
@@ -181,13 +184,13 @@ describe("R31 recovering missing days after the first stored day", () => {
     expect(summary.siteDaysStored.slice(3)).toEqual([
       "boraei:2026-10-02", "mohamed-boraei:2026-10-02", "soma:2026-10-02",
       "boraei:2026-10-03", "mohamed-boraei:2026-10-03", "soma:2026-10-03",
-      "boraei:2026-10-04", "mohamed-boraei:2026-10-04",
+      "boraei:2026-10-04",
     ]);
-    // Cloudflare calls: 1 discovery + 3 accounts + 2 per site-day; D1 batches: 1 discovery + 1 stored days
-    // + 1 stored CPU days + 3 accounts + 3 CPU writes (spec 004) + 1 per site-day + 1 purge.
-    expect(summary.cpuDaysStored).toHaveLength(3 * 29);
+    // Cloudflare calls: 1 discovery + 3 accounts + 3 account CPU (spec 004) + 2 per site-day; D1 batches:
+    // 1 discovery + 1 stored days + 1 stored CPU days + 3 accounts + 3 CPU writes + 1 per site-day + 1 purge.
     const d1 = 1 + 1 + 1 + 3 + 3 + (3 + GAP_SITE_DAYS_PER_RUN) + 1;
-    expect(calls).toHaveLength(1 + 3 + 2 * (3 + GAP_SITE_DAYS_PER_RUN));
+    expect(calls).toHaveLength(1 + 3 + 3 + 2 * (3 + GAP_SITE_DAYS_PER_RUN));
+    expect(calls.length + d1).toBe(47);
     expect(calls.length + d1).toBeLessThanOrEqual(50);
   });
 });
@@ -198,27 +201,32 @@ describe("spec 004 R3, R6 Workers CPU in the daily task", () => {
     return results.map((r) => r.day);
   }
 
-  it("reads the CPU inside the account query, with no extra Cloudflare call", async () => {
+  it("reads the CPU in one query of its own per account, and the usage query carries no CPU part", async () => {
     const { fetchFn, calls } = fakeCloudflare();
     await runDailyTask(env, NOW, fetchFn);
-    expect(calls.filter((c) => c.op === "AccountUsage")).toHaveLength(3);
-    expect(calls).toHaveLength(1 + 3 + 2 * 3);
+    expect(calls.filter((c) => c.op === "AccountCpu").map((c) => c.variables.tag)).toEqual(sitesJson.accounts.map((a) => a.accountId));
+    expect(calls.filter((c) => c.op === "AccountUsage").every((c) => !/\bc\d{8}:/.test(c.query))).toBe(true);
   });
 
-  it("fills up to 29 days back on the first run, never a day older, and keeps the usage range at yesterday", async () => {
-    const { fetchFn, calls } = fakeCloudflare();
-    const summary = await runDailyTask(env, NOW, fetchFn);
+  it("chooses yesterday plus the oldest missing days, at most 14, never older than the 29-day window", () => {
+    const first = cpuDaysToRead([], NOW);
+    expect(first).toHaveLength(14);
+    expect(first.slice(0, 13)).toEqual(["2026-09-30", ...Array.from({ length: 12 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`)]);
+    expect(first.at(-1)).toBe(YESTERDAY);
+    expect(cpuDaysToRead(first, NOW)).toEqual([...Array.from({ length: 13 }, (_, i) => `2026-10-${String(13 + i).padStart(2, "0")}`), YESTERDAY]);
+  });
+
+  it("fills the 29 days in three runs, then reads only yesterday", async () => {
+    const before = await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+    expect(before.cpuDaysStored).toHaveLength(3 * 14);
+    await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+    const third = await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+    expect(third.cpuDaysStored.filter((d) => d.startsWith("cobtec:"))).toEqual(["cobtec:2026-10-26", "cobtec:2026-10-27", `cobtec:${YESTERDAY}`]);
 
     const days = await cpuDays(cobtec.accountId);
     expect(days).toHaveLength(29);
     expect(days[0]).toBe("2026-09-30");
     expect(days.at(-1)).toBe(YESTERDAY);
-    const query = calls.find((c) => c.op === "AccountUsage" && c.variables.tag === cobtec.accountId)!;
-    expect(query.query).not.toContain("c20260929:");
-    expect(query.query).not.toContain("c20261029:");
-    expect(query.variables).toMatchObject({ from: YESTERDAY, to: YESTERDAY });
-    expect(summary.cpuDaysStored).toHaveLength(3 * 29);
-    expect(summary.cpuFailed).toEqual([]);
   });
 
   it("stores the script figures in ms with the requests cut", async () => {
@@ -228,25 +236,35 @@ describe("spec 004 R3, R6 Workers CPU in the daily task", () => {
     ).toEqual({ script: "dummy-worker", requests: 100, errors: 2, exceeded_resources: 2, cpu_p50_ms: 1.2, cpu_p99_ms: 9.5 });
   });
 
-  it("reads only yesterday on the next run", async () => {
-    await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+  it("reads only yesterday once the window is full", async () => {
+    for (let i = 0; i < 3; i++) await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
     const { fetchFn, calls } = fakeCloudflare();
     const summary = await runDailyTask(env, new Date("2026-10-30T01:00:00Z"), fetchFn);
 
-    const query = calls.find((c) => c.op === "AccountUsage")!.query;
+    const query = calls.find((c) => c.op === "AccountCpu")!.query;
     expect([...query.matchAll(/\bc(\d{8}):/g)].map((m) => m[1])).toEqual(["20261029"]);
     expect(summary.cpuDaysStored).toEqual(["cobtec:2026-10-29", "soma:2026-10-29", "boraei:2026-10-29"]);
   });
 
   it("reads again on the next run a day Cloudflare did not fully answer", async () => {
-    await runDailyTask(env, NOW, fakeCloudflare({ dropStatus: ["20261027"] }).fetchFn);
-    expect(await cpuDays(cobtec.accountId)).not.toContain("2026-10-27");
+    await runDailyTask(env, NOW, fakeCloudflare({ dropStatus: ["20260930"] }).fetchFn);
+    expect(await cpuDays(cobtec.accountId)).not.toContain("2026-09-30");
 
     const { fetchFn, calls } = fakeCloudflare();
-    await runDailyTask(env, new Date("2026-10-30T01:00:00Z"), fetchFn);
-    const query = calls.find((c) => c.op === "AccountUsage")!.query;
-    expect([...query.matchAll(/\bc(\d{8}):/g)].map((m) => m[1])).toEqual(["20261027", "20261029"]);
-    expect(await cpuDays(cobtec.accountId)).toContain("2026-10-27");
+    await runDailyTask(env, NOW, fetchFn);
+    const query = calls.find((c) => c.op === "AccountCpu")!.query;
+    expect(query).toContain("c20260930:");
+    expect(await cpuDays(cobtec.accountId)).toContain("2026-09-30");
+  });
+
+  it("keeps the usage when Cloudflare refuses the CPU query, and logs only the described error", async () => {
+    const summary = await runDailyTask(env, NOW, fakeCloudflare({ failCpu: cobtec.accountId }).fetchFn);
+
+    expect(summary.accountsStored).toEqual(["cobtec", "soma", "boraei"]);
+    expect(summary.cpuFailed).toEqual(["cobtec"]);
+    expect(await cpuDays(cobtec.accountId)).toEqual([]);
+    expect(await cpuDays(sitesJson.accounts[1]!.accountId)).toHaveLength(14);
+    expect(errorSpy).toHaveBeenCalledWith("workers cpu failed", { account: "cobtec", error: "query: Cloudflare GraphQL query failed: too many nodes" });
   });
 
   it("keeps the usage when the CPU write fails, and logs it without the token", async () => {
@@ -260,11 +278,11 @@ describe("spec 004 R3, R6 Workers CPU in the daily task", () => {
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(env.CLOUDFLARE_ANALYTICS_TOKEN);
   });
 
-  it("stores no CPU for an account whose query failed", async () => {
+  it("keeps going with the other accounts when one is unreachable", async () => {
     const summary = await runDailyTask(env, NOW, fakeCloudflare({ failAccount: cobtec.accountId }).fetchFn);
-    expect(summary.cpuFailed).toEqual([]);
+    expect(summary.cpuFailed).toEqual(["cobtec"]);
     expect(await cpuDays(cobtec.accountId)).toEqual([]);
-    expect(await cpuDays(sitesJson.accounts[1]!.accountId)).toHaveLength(29);
+    expect(await cpuDays(sitesJson.accounts[1]!.accountId)).toHaveLength(14);
   });
 });
 

@@ -1,15 +1,18 @@
 // Daily task (01:00 UTC): discovery, plan usage of every account, traffic of every site for the previous
 // UTC day, recovery of days that failed after the first stored day, and IP purge (R28–R33, R41).
-// Spec 004: the same account query also reads Workers CPU, stored in its own D1 batch.
+// Spec 004: Workers CPU per account in a query and a D1 batch of their own.
 // Budget: Workers Free allows 50 subrequests per invocation (fetch and D1 counted together here).
-// A normal run uses about 24; the worst case with the full recovery cap stays below 50.
+// A normal run uses about 26; the worst case with the full recovery cap is 47.
 import sitesJson from "../config/sites.json";
 import { describeError, graphql } from "./cloudflare/graphql";
 import {
+  accountCpuQuery,
   accountUsageQuery,
+  CPU_DAYS_PER_QUERY,
   settingsQuery,
   siteDayHoursQuery,
   siteDayQuery,
+  type AccountCpuData,
   type AccountUsageData,
   type SettingsData,
   type SiteDayData,
@@ -22,8 +25,22 @@ import { parseSettings, settingsVariables } from "./logic/discovery";
 import { hoursVariables, parseSiteDay, siteDayVariables, topIpsOf, type SiteConfig } from "./logic/traffic";
 import { parseAccountUsage } from "./logic/usage";
 
-/** Site-days recovered per run besides yesterday: 3 subrequests each (2 queries + 1 D1 batch). */
-export const GAP_SITE_DAYS_PER_RUN = 8;
+/**
+ * Site-days recovered per run besides yesterday: 3 subrequests each (2 queries + 1 D1 batch). Lowered from 8
+ * to 7 by spec 004, whose CPU query and write add 2 subrequests per account.
+ */
+export const GAP_SITE_DAYS_PER_RUN = 7;
+
+/**
+ * CPU days to read for one account (spec 004, R6): yesterday plus the oldest missing days of the last 29, at most
+ * `CPU_DAYS_PER_QUERY` in all. The oldest go first because they are the first to leave Cloudflare's precise
+ * window (P11); the first run fills 14 days, the next ones the rest, then only yesterday.
+ */
+export function cpuDaysToRead(stored: string[], now: Date): string[] {
+  const yesterday = previousUtcDay(now);
+  const missing = workerDays(missingDays(stored, now), now).filter((day) => day !== yesterday);
+  return [...missing.slice(0, CPU_DAYS_PER_QUERY - 1), yesterday].sort();
+}
 
 const DAY_MS = 86_400_000;
 
@@ -113,23 +130,20 @@ export async function runDailyTask(
     const id = account.accountId;
     const gaps = gapDays(stored.accounts.days[id] ?? [], stored.accounts.first[id] ?? null, now);
     const days = [...new Set([...gaps, yesterday])].sort();
-    // Spec 004 R6: CPU days are tracked on their own, so the first run fills up to 29 days back (P11 limit)
-    // without widening the D1 and R2 range of the usage days.
-    const cpuDays = workerDays([...new Set([...missingDays(cpuStored[id] ?? [], now), yesterday])].sort(), now);
-    let data: AccountUsageData;
     try {
-      const query = accountUsageQuery(workerDays(days, now), cpuDays);
-      data = await graphql<AccountUsageData>(token, query, { tag: id, from: days[0], to: yesterday }, fetchFn);
+      const query = accountUsageQuery(workerDays(days, now));
+      const data = await graphql<AccountUsageData>(token, query, { tag: id, from: days[0], to: yesterday }, fetchFn);
       const parsed = parseAccountUsage(data, days);
       await saveAccountDays(db, id, parsed.days, now);
       summary.accountsStored.push(account.id);
     } catch (error) {
       summary.accountsFailed.push(account.id);
       console.error("account usage failed", { account: account.id, error: describeError(error) });
-      continue;
     }
-    // A failed CPU write never undoes the usage already stored (R33 of spec 001).
+    // Spec 004 R3, R6: CPU in its own query, so a failure never touches the usage (R33 of spec 001).
     try {
+      const cpuDays = cpuDaysToRead(cpuStored[id] ?? [], now);
+      const data = await graphql<AccountCpuData>(token, accountCpuQuery(cpuDays), { tag: id }, fetchFn);
       const cpu = parseCpu(data, cpuDays);
       await saveCpuDays(db, id, cpu, now);
       summary.cpuDaysStored.push(...Object.keys(cpu).map((day) => `${account.id}:${day}`));
