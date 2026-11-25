@@ -1,7 +1,8 @@
 // Daily task (01:00 UTC): discovery, plan usage of every account, traffic of every site for the previous
 // UTC day, recovery of days that failed after the first stored day, and IP purge (R28–R33, R41).
+// Spec 004: the same account query also reads Workers CPU, stored in its own D1 batch.
 // Budget: Workers Free allows 50 subrequests per invocation (fetch and D1 counted together here).
-// A normal run uses about 20; the worst case with the full recovery cap stays below 50.
+// A normal run uses about 24; the worst case with the full recovery cap stays below 50.
 import sitesJson from "../config/sites.json";
 import { describeError, graphql } from "./cloudflare/graphql";
 import {
@@ -14,8 +15,9 @@ import {
   type SiteDayData,
   type SiteDayHoursData,
 } from "./cloudflare/queries";
-import { purgeIpsBefore, saveAccountDays, saveDatasetAvailability, saveSiteDay, storedDays } from "./db/statistics";
-import { BACKFILL_DAYS, gapDays, ipCutoffDay, previousUtcDay, utcDay, workerDays } from "./logic/days";
+import { purgeIpsBefore, saveAccountDays, saveCpuDays, saveDatasetAvailability, saveSiteDay, storedCpuDays, storedDays } from "./db/statistics";
+import { parseCpu } from "./logic/cpu";
+import { BACKFILL_DAYS, gapDays, ipCutoffDay, missingDays, previousUtcDay, utcDay, workerDays } from "./logic/days";
 import { parseSettings, settingsVariables } from "./logic/discovery";
 import { hoursVariables, parseSiteDay, siteDayVariables, topIpsOf, type SiteConfig } from "./logic/traffic";
 import { parseAccountUsage } from "./logic/usage";
@@ -41,6 +43,9 @@ export interface DailyTaskSummary {
   discovery: "ok" | "failed";
   accountsStored: string[];
   accountsFailed: string[];
+  /** Spec 004: CPU days stored per account id, e.g. `boraei:2026-11-24`. */
+  cpuDaysStored: string[];
+  cpuFailed: string[];
   siteDaysStored: string[];
   siteDaysFailed: string[];
   gapsLeft: number;
@@ -76,6 +81,8 @@ export async function runDailyTask(
     discovery: "ok",
     accountsStored: [],
     accountsFailed: [],
+    cpuDaysStored: [],
+    cpuFailed: [],
     siteDaysStored: [],
     siteDaysFailed: [],
     gapsLeft: 0,
@@ -99,21 +106,36 @@ export async function runDailyTask(
   }
 
   const stored = await storedDays(db, windowStart);
+  const cpuStored = await storedCpuDays(db, windowStart);
 
   // R28, R31: each account in one query (up to 31 days) and one D1 batch; a failure does not stop the rest (R33).
   for (const account of config.accounts) {
     const id = account.accountId;
     const gaps = gapDays(stored.accounts.days[id] ?? [], stored.accounts.first[id] ?? null, now);
     const days = [...new Set([...gaps, yesterday])].sort();
+    // Spec 004 R6: CPU days are tracked on their own, so the first run fills up to 29 days back (P11 limit)
+    // without widening the D1 and R2 range of the usage days.
+    const cpuDays = workerDays([...new Set([...missingDays(cpuStored[id] ?? [], now), yesterday])].sort(), now);
+    let data: AccountUsageData;
     try {
-      const query = accountUsageQuery(workerDays(days, now));
-      const data = await graphql<AccountUsageData>(token, query, { tag: id, from: days[0], to: yesterday }, fetchFn);
+      const query = accountUsageQuery(workerDays(days, now), cpuDays);
+      data = await graphql<AccountUsageData>(token, query, { tag: id, from: days[0], to: yesterday }, fetchFn);
       const parsed = parseAccountUsage(data, days);
       await saveAccountDays(db, id, parsed.days, now);
       summary.accountsStored.push(account.id);
     } catch (error) {
       summary.accountsFailed.push(account.id);
       console.error("account usage failed", { account: account.id, error: describeError(error) });
+      continue;
+    }
+    // A failed CPU write never undoes the usage already stored (R33 of spec 001).
+    try {
+      const cpu = parseCpu(data, cpuDays);
+      await saveCpuDays(db, id, cpu, now);
+      summary.cpuDaysStored.push(...Object.keys(cpu).map((day) => `${account.id}:${day}`));
+    } catch (error) {
+      summary.cpuFailed.push(account.id);
+      console.error("workers cpu failed", { account: account.id, error: describeError(error) });
     }
   }
 

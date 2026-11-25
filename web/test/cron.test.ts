@@ -28,6 +28,32 @@ const settingsData = {
 interface FakeOptions {
   failZone?: string;
   failAccount?: string;
+  /** Spec 004: quantiles of every CPU row (microseconds); a negative one makes the D1 write fail. */
+  cpuP99Us?: number;
+  /** Spec 004: CPU days (YYYYMMDD) whose status part Cloudflare leaves out of the answer. */
+  dropStatus?: string[];
+}
+
+/** Spec 004: one dummy script per `c<day>` and `x<day>` part the query asks for, 2 of its requests cut. */
+function cpuParts(query: string, options: FakeOptions): Record<string, unknown> {
+  const parts: Record<string, unknown> = {};
+  for (const [, day] of query.matchAll(/\bc(\d{8}):/g)) {
+    parts[`c${day}`] = [
+      {
+        sum: { requests: 100, errors: 2 },
+        quantiles: { cpuTimeP50: 1200, cpuTimeP99: options.cpuP99Us ?? 9500, cpuTimeP999: 15000, wallTimeP50: 2000, wallTimeP99: 20000 },
+        avg: { sampleInterval: 1 },
+        dimensions: { scriptName: "dummy-worker" },
+      },
+    ];
+    if (!options.dropStatus?.includes(day!)) {
+      parts[`x${day}`] = [
+        { sum: { requests: 98 }, dimensions: { scriptName: "dummy-worker", status: "success" } },
+        { sum: { requests: 2 }, dimensions: { scriptName: "dummy-worker", status: "exceededResources" } },
+      ];
+    }
+  }
+  return parts;
 }
 
 /** Fake Cloudflare GraphQL API: answers by operation name with dummy fixtures and records each call. */
@@ -40,7 +66,8 @@ function fakeCloudflare(options: FakeOptions = {}) {
     if (op === "Settings") return Response.json({ data: settingsData });
     if (op === "AccountUsage") {
       if (body.variables.tag === options.failAccount) return new Response("unavailable", { status: 503 });
-      return Response.json({ data: accountFixture });
+      const account = { ...accountFixture.viewer.accounts[0], ...cpuParts(body.query, options) };
+      return Response.json({ data: { viewer: { accounts: [account] } } });
     }
     if (op === "SiteDay") {
       if (body.variables.tag === options.failZone) return Response.json({ data: null, errors: [{ message: "zone error" }] });
@@ -70,7 +97,7 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
   await db.batch(
-    ["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability"].map((t) => db.prepare(`DELETE FROM ${t}`)),
+    ["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability", "workers_cpu_daily", "workers_cpu_checked"].map((t) => db.prepare(`DELETE FROM ${t}`)),
   );
   logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -157,10 +184,87 @@ describe("R31 recovering missing days after the first stored day", () => {
       "boraei:2026-10-04", "mohamed-boraei:2026-10-04",
     ]);
     // Cloudflare calls: 1 discovery + 3 accounts + 2 per site-day; D1 batches: 1 discovery + 1 stored days
-    // + 3 accounts + 1 per site-day + 1 purge.
-    const d1 = 1 + 1 + 3 + (3 + GAP_SITE_DAYS_PER_RUN) + 1;
+    // + 1 stored CPU days + 3 accounts + 3 CPU writes (spec 004) + 1 per site-day + 1 purge.
+    expect(summary.cpuDaysStored).toHaveLength(3 * 29);
+    const d1 = 1 + 1 + 1 + 3 + 3 + (3 + GAP_SITE_DAYS_PER_RUN) + 1;
     expect(calls).toHaveLength(1 + 3 + 2 * (3 + GAP_SITE_DAYS_PER_RUN));
     expect(calls.length + d1).toBeLessThanOrEqual(50);
+  });
+});
+
+describe("spec 004 R3, R6 Workers CPU in the daily task", () => {
+  async function cpuDays(accountId: string): Promise<string[]> {
+    const { results } = await db.prepare("SELECT day FROM workers_cpu_checked WHERE account_id = ? ORDER BY day").bind(accountId).all<{ day: string }>();
+    return results.map((r) => r.day);
+  }
+
+  it("reads the CPU inside the account query, with no extra Cloudflare call", async () => {
+    const { fetchFn, calls } = fakeCloudflare();
+    await runDailyTask(env, NOW, fetchFn);
+    expect(calls.filter((c) => c.op === "AccountUsage")).toHaveLength(3);
+    expect(calls).toHaveLength(1 + 3 + 2 * 3);
+  });
+
+  it("fills up to 29 days back on the first run, never a day older, and keeps the usage range at yesterday", async () => {
+    const { fetchFn, calls } = fakeCloudflare();
+    const summary = await runDailyTask(env, NOW, fetchFn);
+
+    const days = await cpuDays(cobtec.accountId);
+    expect(days).toHaveLength(29);
+    expect(days[0]).toBe("2026-09-30");
+    expect(days.at(-1)).toBe(YESTERDAY);
+    const query = calls.find((c) => c.op === "AccountUsage" && c.variables.tag === cobtec.accountId)!;
+    expect(query.query).not.toContain("c20260929:");
+    expect(query.query).not.toContain("c20261029:");
+    expect(query.variables).toMatchObject({ from: YESTERDAY, to: YESTERDAY });
+    expect(summary.cpuDaysStored).toHaveLength(3 * 29);
+    expect(summary.cpuFailed).toEqual([]);
+  });
+
+  it("stores the script figures in ms with the requests cut", async () => {
+    await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+    expect(
+      await db.prepare("SELECT script, requests, errors, exceeded_resources, cpu_p50_ms, cpu_p99_ms FROM workers_cpu_daily WHERE day = ? AND account_id = ?").bind(YESTERDAY, cobtec.accountId).first(),
+    ).toEqual({ script: "dummy-worker", requests: 100, errors: 2, exceeded_resources: 2, cpu_p50_ms: 1.2, cpu_p99_ms: 9.5 });
+  });
+
+  it("reads only yesterday on the next run", async () => {
+    await runDailyTask(env, NOW, fakeCloudflare().fetchFn);
+    const { fetchFn, calls } = fakeCloudflare();
+    const summary = await runDailyTask(env, new Date("2026-10-30T01:00:00Z"), fetchFn);
+
+    const query = calls.find((c) => c.op === "AccountUsage")!.query;
+    expect([...query.matchAll(/\bc(\d{8}):/g)].map((m) => m[1])).toEqual(["20261029"]);
+    expect(summary.cpuDaysStored).toEqual(["cobtec:2026-10-29", "soma:2026-10-29", "boraei:2026-10-29"]);
+  });
+
+  it("reads again on the next run a day Cloudflare did not fully answer", async () => {
+    await runDailyTask(env, NOW, fakeCloudflare({ dropStatus: ["20261027"] }).fetchFn);
+    expect(await cpuDays(cobtec.accountId)).not.toContain("2026-10-27");
+
+    const { fetchFn, calls } = fakeCloudflare();
+    await runDailyTask(env, new Date("2026-10-30T01:00:00Z"), fetchFn);
+    const query = calls.find((c) => c.op === "AccountUsage")!.query;
+    expect([...query.matchAll(/\bc(\d{8}):/g)].map((m) => m[1])).toEqual(["20261027", "20261029"]);
+    expect(await cpuDays(cobtec.accountId)).toContain("2026-10-27");
+  });
+
+  it("keeps the usage when the CPU write fails, and logs it without the token", async () => {
+    const summary = await runDailyTask(env, NOW, fakeCloudflare({ cpuP99Us: -1 }).fetchFn);
+
+    expect(summary.accountsStored).toEqual(["cobtec", "soma", "boraei"]);
+    expect(summary.cpuFailed).toEqual(["cobtec", "soma", "boraei"]);
+    expect(await count("SELECT COUNT(*) AS n FROM workers_cpu_checked")).toBe(0);
+    expect(await count("SELECT COUNT(DISTINCT account_id) AS n FROM usage_daily")).toBe(3);
+    expect(errorSpy).toHaveBeenCalledWith("workers cpu failed", expect.objectContaining({ account: "cobtec" }));
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(env.CLOUDFLARE_ANALYTICS_TOKEN);
+  });
+
+  it("stores no CPU for an account whose query failed", async () => {
+    const summary = await runDailyTask(env, NOW, fakeCloudflare({ failAccount: cobtec.accountId }).fetchFn);
+    expect(summary.cpuFailed).toEqual([]);
+    expect(await cpuDays(cobtec.accountId)).toEqual([]);
+    expect(await cpuDays(sitesJson.accounts[1]!.accountId)).toHaveLength(29);
   });
 });
 
