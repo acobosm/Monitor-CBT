@@ -14,7 +14,7 @@ As in specs 001 and 003: parsing, µs to ms conversion, script-to-site mapping a
 ## Modified files
 | File | Change |
 |---|---|
-| `web/src/cloudflare/queries.ts` | `accountUsageQuery` takes a second list, the CPU days, and adds per day `c<day>` (by `scriptName`: `sum { requests errors }`, `quantiles { cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99 }`, `avg { sampleInterval }`) and `x<day>` (filter `status: "exceededResources"`, by `scriptName`: `sum { requests }`). The `w<day>` parts stay as they are, so the precision measured in P11 does not change. |
+| `web/src/cloudflare/queries.ts` | `accountUsageQuery` takes a second list, the CPU days, and adds per day `c<day>` (by `scriptName`: `sum { requests errors }`, `quantiles { cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99 }`, `avg { sampleInterval }`) and `x<day>` (by `scriptName` and `status`: `sum { requests }`; the parser keeps `exceededResources`, because filtering by `status` was not confirmed by the discovery). The `w<day>` parts stay as they are, so the precision measured in P11 does not change. |
 | `web/src/db/statistics.ts` | `saveCpuDays` (one D1 batch: delete and insert the day's rows, plus the `checked` mark), `storedCpuDays`, `readCpu`. |
 | `web/src/cron.ts` | CPU days per account: days of the last 29 missing from `workers_cpu_checked`, plus yesterday, limited by `workerDays` (P11). They are independent of the usage days, so the D1/R2 range does not grow. |
 | `web/config/sites.json` | `scripts` per site: soma `["soma-web"]`, boraei `[]`, mohamed-boraei `["mohamed-boraei", "__unknown__"]`. |

@@ -1,0 +1,39 @@
+{
+  "viewer": {
+    "accounts": [
+      {
+        "c20261123": [
+          {
+            "sum": { "requests": 18383, "errors": 0 },
+            "quantiles": { "cpuTimeP50": 1167, "cpuTimeP99": 69244, "cpuTimeP999": 123157, "wallTimeP50": 2159, "wallTimeP99": 91870 },
+            "avg": { "sampleInterval": 1.7 },
+            "dimensions": { "scriptName": "mohamed-boraei" }
+          },
+          {
+            "sum": { "requests": 1205, "errors": 103 },
+            "quantiles": { "cpuTimeP50": 8094, "cpuTimeP99": 29255, "cpuTimeP999": 30001, "wallTimeP50": 9000, "wallTimeP99": 31000 },
+            "avg": { "sampleInterval": 2.1 },
+            "dimensions": { "scriptName": "__unknown__" }
+          }
+        ],
+        "x20261123": [
+          { "sum": { "requests": 18293 }, "dimensions": { "scriptName": "mohamed-boraei", "status": "success" } },
+          { "sum": { "requests": 90 }, "dimensions": { "scriptName": "mohamed-boraei", "status": "clientDisconnected" } },
+          { "sum": { "requests": 1102 }, "dimensions": { "scriptName": "__unknown__", "status": "success" } },
+          { "sum": { "requests": 103 }, "dimensions": { "scriptName": "__unknown__", "status": "exceededResources" } }
+        ],
+        "c20261124": [],
+        "x20261124": [
+          { "sum": { "requests": 7 }, "dimensions": { "scriptName": "", "status": "exceededResources" } }
+        ],
+        "c20261125": [],
+        "x20261125": [],
+        "c20261126": [],
+        "d1": [],
+        "d1Storage": [],
+        "r2Ops": [],
+        "r2Storage": []
+      }
+    ]
+  }
+}

@@ -8,9 +8,28 @@ function checkedDay(day: string): string {
   return day;
 }
 
-/** Name of the part of a query that reads one day, e.g. `w20261031` for Worker requests. */
-export function dayAlias(prefix: "w" | "v", day: string): string {
+/**
+ * Name of the part of a query that reads one day, e.g. `w20261031` for Worker requests. `c` and `x` read the
+ * CPU of each Worker script and its invocations by status (spec 004).
+ */
+export function dayAlias(prefix: "w" | "v" | "c" | "x", day: string): string {
   return `${prefix}${checkedDay(day).replaceAll("-", "")}`;
+}
+
+const CPU_QUANTILES = "cpuTimeP50 cpuTimeP99 cpuTimeP999 wallTimeP50 wallTimeP99";
+
+/** CPU of each script on one day (`c<day>`); quantiles in microseconds, null when Cloudflare gives none. */
+export interface CpuPartRow {
+  sum: { requests: number; errors: number };
+  quantiles: Record<"cpuTimeP50" | "cpuTimeP99" | "cpuTimeP999" | "wallTimeP50" | "wallTimeP99", number | null>;
+  avg: { sampleInterval: number | null };
+  dimensions: { scriptName: string };
+}
+
+/** Invocations of each script and status on one day (`x<day>`). */
+export interface StatusPartRow {
+  sum: { requests: number };
+  dimensions: { scriptName: string; status: string };
 }
 
 /**
@@ -18,10 +37,17 @@ export function dayAlias(prefix: "w" | "v", day: string): string {
  * account covers the whole window plus today. Worker requests are read one day per part of the query:
  * a range reaching a day about 30 days old is sampled coarsely as a whole, a single day is not (P11, R43).
  */
-export function accountUsageQuery(workerDays: string[]): string {
-  const workers = workerDays
-    .map((day) => `${dayAlias("w", day)}: workersInvocationsAdaptive(limit: 1, filter: { date_geq: "${day}", date_leq: "${day}" }) { sum { requests } }`)
-    .join("\n      ");
+export function accountUsageQuery(workerDays: string[], cpuDays: string[] = []): string {
+  const oneDay = (day: string) => `filter: { date_geq: "${day}", date_leq: "${day}" }`;
+  const workers = [
+    ...workerDays.map((day) => `${dayAlias("w", day)}: workersInvocationsAdaptive(limit: 1, ${oneDay(day)}) { sum { requests } }`),
+    // Spec 004: CPU per script, and invocations per script and status to count `exceededResources` (R1–R3).
+    // Fields and status values confirmed by the discovery of 2026-11-24; times come in microseconds.
+    ...cpuDays.flatMap((day) => [
+      `${dayAlias("c", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests errors } quantiles { ${CPU_QUANTILES} } avg { sampleInterval } dimensions { scriptName } }`,
+      `${dayAlias("x", day)}: workersInvocationsAdaptive(limit: 1000, ${oneDay(day)}) { sum { requests } dimensions { scriptName status } }`,
+    ]),
+  ].join("\n      ");
   return `query AccountUsage($tag: string!, $from: Date!, $to: Date!) {
   viewer {
     accounts(filter: { accountTag: $tag }) {
@@ -54,7 +80,9 @@ export interface AccountUsageData {
       d1Storage: { max: { databaseSizeBytes: number }; dimensions: { date: string; databaseId: string } }[];
       r2Ops: { sum: { requests: number }; dimensions: { date: string; actionType: string } }[];
       r2Storage: { max: { payloadSize: number; metadataSize: number }; dimensions: { date: string; bucketName: string } }[];
-    } & { [alias: `w${number}`]: { sum: { requests: number } }[] | undefined })[];
+    } & { [alias: `w${number}`]: { sum: { requests: number } }[] | undefined } & {
+      [alias: `c${number}`]: CpuPartRow[] | undefined;
+    } & { [alias: `x${number}`]: StatusPartRow[] | undefined })[];
   };
 }
 
