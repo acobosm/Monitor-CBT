@@ -2,11 +2,46 @@
 // figure per script and day. Pure: the daily task and the routes only store or show what this returns.
 import { dayAlias, type AccountCpuData, type CpuPartRow, type StatusPartRow } from "../cloudflare/queries";
 import type { ScriptCpu } from "../db/statistics";
+import type { SiteConfig } from "./traffic";
 
 /** Status of the invocations Cloudflare cut for exceeding resources (discovery of 2026-11-24). */
 export const EXCEEDED_STATUS = "exceededResources";
 /** Script name Cloudflare gives to invocations it did not attribute to a script. */
 export const UNKNOWN_SCRIPT = "__unknown__";
+export const TEXT_UNKNOWN_SCRIPT = "Sin script";
+
+/** Figures of a site for one day (R15): the highest p50 and p99 among its scripts and the sum of requests cut. */
+export interface SiteCpuDay {
+  cpuP50Ms: number | null;
+  cpuP99Ms: number | null;
+  exceededResources: number;
+}
+
+/** Name shown for a script: `__unknown__` reads "Sin script" (R12). */
+export function scriptLabel(script: string): string {
+  return script === UNKNOWN_SCRIPT ? TEXT_UNKNOWN_SCRIPT : script;
+}
+
+const highest = (values: (number | null)[]): number | null => {
+  const known = values.filter((v): v is number => v !== null);
+  return known.length ? Math.max(...known) : null;
+};
+
+/**
+ * CPU of a site for one day, from its account's days (R9, R15, R21). Only the scripts listed for the site count,
+ * so staging scripts and other sites' scripts never reach its page. A day never processed is null ("Sin dato");
+ * a processed day where the site's scripts ran nothing has no quantiles and 0 requests cut.
+ */
+export function siteCpuDay(site: Pick<SiteConfig, "scripts">, accountDays: Record<string, ScriptCpu[]>, day: string): SiteCpuDay | null {
+  const scripts = accountDays[day];
+  if (!scripts) return null;
+  const own = scripts.filter((s) => site.scripts.includes(s.script));
+  return {
+    cpuP50Ms: highest(own.map((s) => s.cpuP50Ms)),
+    cpuP99Ms: highest(own.map((s) => s.cpuP99Ms)),
+    exceededResources: own.reduce((sum, s) => sum + s.exceededResources, 0),
+  };
+}
 
 /** Microseconds from Cloudflare to milliseconds, keeping the decimals; no figure stays null (R4). */
 export function usToMs(value: number | null | undefined): number | null {

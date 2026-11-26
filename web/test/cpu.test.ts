@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { accountCpuQuery, accountUsageQuery, CPU_DAYS_PER_QUERY, dayAlias, type AccountCpuData } from "../src/cloudflare/queries";
-import { EXCEEDED_STATUS, parseCpu, UNKNOWN_SCRIPT, usToMs } from "../src/logic/cpu";
+import type { ScriptCpu } from "../src/db/statistics";
+import { EXCEEDED_STATUS, parseCpu, scriptLabel, siteCpuDay, UNKNOWN_SCRIPT, usToMs } from "../src/logic/cpu";
+import type { SiteConfig } from "../src/logic/traffic";
+import sitesJson from "../config/sites.json";
 import fixture from "./fixtures/account-cpu.json";
 
 // Dummy figures shaped like the discovery of 2026-11-24 (BORAEI account); the API is never called.
@@ -106,5 +109,71 @@ describe("spec 004 R1, R2, R5 parsing the CPU parts", () => {
 
   it("returns nothing for an account Cloudflare did not return", () => {
     expect(parseCpu({ viewer: { accounts: [] } } as unknown as AccountCpuData, ["2026-11-23"])).toEqual({});
+  });
+});
+
+describe("spec 004 R8 scripts of each site", () => {
+  const scriptsOf = (id: string) => (sitesJson.sites as SiteConfig[]).find((s) => s.id === id)!.scripts;
+
+  it("lists soma-web for SOMA, none for BORAEI, and mohamed-boraei with __unknown__ for MOHAMED-BORAEI", () => {
+    expect(scriptsOf("soma")).toEqual(["soma-web"]);
+    expect(scriptsOf("boraei")).toEqual([]);
+    expect(scriptsOf("mohamed-boraei")).toEqual(["mohamed-boraei", UNKNOWN_SCRIPT]);
+  });
+
+  it("never lists a staging script", () => {
+    expect((sitesJson.sites as SiteConfig[]).flatMap((s) => s.scripts).some((s) => s.includes("staging"))).toBe(false);
+  });
+});
+
+describe("spec 004 R12 script label", () => {
+  it("reads __unknown__ as Sin script and keeps every other name", () => {
+    expect(scriptLabel(UNKNOWN_SCRIPT)).toBe("Sin script");
+    expect(scriptLabel("soma-web")).toBe("soma-web");
+  });
+});
+
+describe("spec 004 R9 R15 R21 CPU of a site for one day", () => {
+  const row = (script: string, p50: number | null, p99: number | null, cut: number): ScriptCpu => ({
+    script,
+    requests: 100,
+    errors: 0,
+    exceededResources: cut,
+    cpuP50Ms: p50,
+    cpuP99Ms: p99,
+    cpuP999Ms: null,
+    wallP50Ms: null,
+    wallP99Ms: null,
+    sampleInterval: 1,
+  });
+  const days: Record<string, ScriptCpu[]> = {
+    "2026-11-24": [row("dummy-site", 2.5, 40.2, 1), row("dummy-site-staging", 50, 900, 30), row(UNKNOWN_SCRIPT, 8.1, 29, 103)],
+    "2026-11-23": [row("dummy-site-staging", 3, 9, 0)],
+    "2026-11-22": [row(UNKNOWN_SCRIPT, null, null, 4)],
+  };
+  const site = { scripts: ["dummy-site", UNKNOWN_SCRIPT] };
+
+  it("takes the highest p50 and p99 of the site's scripts and sums their requests cut", () => {
+    expect(siteCpuDay(site, days, "2026-11-24")).toEqual({ cpuP50Ms: 8.1, cpuP99Ms: 40.2, exceededResources: 104 });
+  });
+
+  it("never counts a script not listed for the site, such as staging", () => {
+    expect(siteCpuDay({ scripts: ["dummy-site"] }, days, "2026-11-24")).toEqual({ cpuP50Ms: 2.5, cpuP99Ms: 40.2, exceededResources: 1 });
+  });
+
+  it("gives no quantiles and 0 cut on a processed day where the site ran nothing", () => {
+    expect(siteCpuDay(site, days, "2026-11-23")).toEqual({ cpuP50Ms: null, cpuP99Ms: null, exceededResources: 0 });
+  });
+
+  it("keeps the cut of a script with no quantiles", () => {
+    expect(siteCpuDay(site, days, "2026-11-22")).toEqual({ cpuP50Ms: null, cpuP99Ms: null, exceededResources: 4 });
+  });
+
+  it("gives null for a day never processed, so it shows Sin dato and never a 0", () => {
+    expect(siteCpuDay(site, days, "2026-11-21")).toBeNull();
+  });
+
+  it("gives nothing of the account to a site without scripts", () => {
+    expect(siteCpuDay({ scripts: [] }, days, "2026-11-24")).toEqual({ cpuP50Ms: null, cpuP99Ms: null, exceededResources: 0 });
   });
 });

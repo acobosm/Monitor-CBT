@@ -14,6 +14,8 @@ export interface SiteConfig {
   zoneTag: string;
   /** Count only this hostname (e.g. www.mohamedboraei.com, whose apex only redirects). */
   host?: string;
+  /** Workers scripts whose CPU belongs to this site (spec 004 R8); empty when the site serves static assets only. */
+  scripts: string[];
 }
 
 export const TEXT_DAY_NOTE = "Cada día va de 19:00 a 19:00 ECT.";
