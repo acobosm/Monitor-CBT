@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sitesJson from "../config/sites.json";
-import { saveAccountDay, saveDatasetAvailability, saveSiteDay, type SiteDay } from "../src/db/statistics";
+import { saveAccountDay, saveCpuDays, saveDatasetAvailability, saveSiteDay, type ScriptCpu, type SiteDay } from "../src/db/statistics";
 import { createApp } from "../src/index";
 import { TEXT_NO_HISTORY } from "../src/logic/notices";
 import { TEXT_INVALID, TEXT_UNVERIFIED } from "../src/logic/token";
@@ -19,6 +19,8 @@ const db = env.STATS_DB;
 
 interface FakeOptions {
   graphql?: () => Response | Promise<Response>;
+  /** Answer of the live Workers CPU query (spec 004); by default dummy scripts of every account. */
+  cpu?: () => Response | Promise<Response>;
   verify?: () => Response | Promise<Response>;
 }
 
@@ -49,12 +51,33 @@ function fakeCloudflare(options: FakeOptions = {}) {
     const body = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
     const op = /query (\w+)/.exec(body.query)?.[1] ?? "unknown";
     calls.push({ op, query: body.query, variables: body.variables });
+    if (op === "AccountCpu" && options.cpu) return options.cpu();
     if (options.graphql) return options.graphql();
+    if (op === "AccountCpu") return Response.json({ data: liveCpu });
     if (op === "SiteVisits") return Response.json({ data: siteVisits(body.query) });
     return Response.json({ data: op === "AccountUsage" ? usage : dayFixture });
   };
   return { fetchFn, calls };
 }
+
+/** Today's live CPU (spec 004), dummy figures in µs: a site script, a staging script and an unattributed one. */
+const liveCpu = {
+  viewer: {
+    accounts: [
+      {
+        c20261029: [
+          { sum: { requests: 50, errors: 0 }, quantiles: { cpuTimeP50: 2000, cpuTimeP99: 12500 }, avg: { sampleInterval: 1 }, dimensions: { scriptName: "soma-web" } },
+          { sum: { requests: 9, errors: 0 }, quantiles: { cpuTimeP50: 70000, cpuTimeP99: 300000 }, avg: { sampleInterval: 1 }, dimensions: { scriptName: "soma-web-staging" } },
+          { sum: { requests: 30, errors: 0 }, quantiles: { cpuTimeP50: 6000, cpuTimeP99: 9000 }, avg: { sampleInterval: 1 }, dimensions: { scriptName: "mohamed-boraei" } },
+        ],
+        x20261029: [
+          { sum: { requests: 5 }, dimensions: { scriptName: "soma-web-staging", status: "exceededResources" } },
+          { sum: { requests: 3 }, dimensions: { scriptName: "", status: "exceededResources" } },
+        ],
+      },
+    ],
+  },
+};
 
 /** Answers every day asked by a SiteVisits query with 5 visits, except 2026-10-20, which is left out. */
 function siteVisits(query: string) {
@@ -99,7 +122,11 @@ async function auditRows() {
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
-  await db.batch(["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability"].map((t) => db.prepare(`DELETE FROM ${t}`)));
+  await db.batch(
+    ["usage_daily", "traffic_daily", "country_daily", "ip_daily", "dataset_availability", "workers_cpu_daily", "workers_cpu_checked"].map((t) =>
+      db.prepare(`DELETE FROM ${t}`),
+    ),
+  );
   await env.AUDIT_DB.prepare("DELETE FROM audit_event").run();
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -242,7 +269,7 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
   it("R34 reads the current day from the API and stores nothing", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake), "/api/usage");
-    expect(fake.calls.map((c) => c.op)).toEqual(["AccountUsage", "AccountUsage", "AccountUsage"]);
+    expect(fake.calls.filter((c) => c.op === "AccountUsage")).toHaveLength(3);
     expect(fake.calls[0]?.variables).toMatchObject({ to: TODAY, from: "2026-09-30" });
     expect(await db.prepare("SELECT COUNT(*) AS n FROM usage_daily").first("n")).toBe(0);
   });
@@ -250,9 +277,10 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
   it("uses at most 31 days per query: the month, or the chart days when they reach into the previous month", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake, () => new Date("2026-10-03T12:00:00Z")), "/api/usage");
-    expect(fake.calls[0]?.variables).toMatchObject({ from: "2026-09-04", to: "2026-10-03" });
+    const usageCalls = () => fake.calls.filter((c) => c.op === "AccountUsage");
+    expect(usageCalls()[0]?.variables).toMatchObject({ from: "2026-09-04", to: "2026-10-03" });
     await get(appWith(fake, () => new Date("2026-10-31T12:00:00Z")), "/api/usage");
-    expect(fake.calls.at(-1)?.variables).toMatchObject({ from: "2026-10-01", to: "2026-10-31" });
+    expect(usageCalls().at(-1)?.variables).toMatchObject({ from: "2026-10-01", to: "2026-10-31" });
   });
 
   it("R43 reads Worker requests one day per part, never a day that began 29.5 days ago or more", async () => {
@@ -273,16 +301,17 @@ describe("/api/usage (R14–R20, R34, R35, R42)", () => {
     await get(app, "/api/usage");
     now = new Date(NOW.getTime() + 59_000);
     await get(app, "/api/usage");
-    expect(fake.calls).toHaveLength(3);
+    expect(fake.calls).toHaveLength(6);
     now = new Date(NOW.getTime() + 60_000);
     await get(app, "/api/usage");
-    expect(fake.calls).toHaveLength(6);
+    expect(fake.calls).toHaveLength(12);
   });
 
   it("does not cache a failed read", async () => {
     let fail = true;
     const fake = fakeCloudflare({
-      graphql: () => (fail ? new Response("down", { status: 503 }) : Response.json({ data: { viewer: { accounts: [] } } })),
+      graphql: () =>
+        fail ? new Response("down", { status: 503 }) : Response.json({ data: { viewer: { accounts: [{ c20261029: [], x20261029: [] }] } } }),
     });
     const app = appWith(fake);
     expect((await json(await get(app, "/api/usage"))).notice).not.toBeNull();
@@ -334,7 +363,8 @@ describe("/api/sites/:id (R21–R27, R34, R35, R42)", () => {
   it("R34 reads today with one query, R35 the missing chart days with another, and stores nothing", async () => {
     const fake = fakeCloudflare();
     await get(appWith(fake), "/api/sites/soma");
-    expect(fake.calls.map((c) => c.op)).toEqual(["SiteDay", "SiteVisits"]);
+    // Spec 004: plus today's Workers CPU of the site's account.
+    expect(fake.calls.map((c) => c.op)).toEqual(["SiteDay", "SiteVisits", "AccountCpu"]);
     expect(fake.calls[0]?.variables).toMatchObject({ day: TODAY, tag: soma.zoneTag });
     expect(fake.calls[1]?.variables).toEqual({ tag: soma.zoneTag });
     expect(await db.prepare("SELECT COUNT(*) AS n FROM traffic_daily").first("n")).toBe(0);
@@ -345,9 +375,10 @@ describe("/api/sites/:id (R21–R27, R34, R35, R42)", () => {
     const app = appWith(fake);
     await get(app, "/api/sites/soma");
     await get(app, "/api/sites/soma");
-    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls).toHaveLength(3);
+    // BORAEI has no Workers scripts: it reads no CPU.
     await get(app, "/api/sites/boraei");
-    expect(fake.calls).toHaveLength(4);
+    expect(fake.calls).toHaveLength(5);
   });
 
   it("R24, R25, R26 selects the last complete day by default, with countries and both top IP tables", async () => {
@@ -516,5 +547,105 @@ describe("charts and panel data (R13–R16, R26–R35)", () => {
     expect(await auditRows()).toEqual([{ email: "owner@example.com", action: "view", target: "panel" }]);
     expect(fake.calls.length).toBeLessThanOrEqual(9);
     expect(fake.calls.filter((c) => c.op === "AccountUsage")).toHaveLength(3);
+  });
+});
+
+describe("spec 004 Workers CPU in the API (R9–R12, R15, R19, R21)", () => {
+  const row = (script: string, p50: number | null, p99: number | null, cut: number): ScriptCpu => ({
+    script,
+    requests: 100,
+    errors: 0,
+    exceededResources: cut,
+    cpuP50Ms: p50,
+    cpuP99Ms: p99,
+    cpuP999Ms: null,
+    wallP50Ms: null,
+    wallP99Ms: null,
+    sampleInterval: 1,
+  });
+  const somaAccount = sitesJson.accounts.find((a) => a.id === "soma")!.accountId;
+  const boraeiAccount = sitesJson.accounts.find((a) => a.id === "boraei")!.accountId;
+  const point = (series: { day: string; value: number | null }[], day: string) => series.find((p) => p.day === day)!.value;
+  const cpuOf = (body: any, account: string) => body.accounts.find((a: { id: string }) => a.id === account).cpu;
+
+  it("R10–R12 gives every script of an account, staging and Sin script included, today live and past days from D1", async () => {
+    await saveCpuDays(db, somaAccount, { [YESTERDAY]: [row("soma-web", 1.5, 20, 0)] }, NOW);
+    const fake = fakeCloudflare();
+    const body = await json(await get(appWith(fake), "/api/usage"));
+    expect(body.notice).toBeNull();
+    const cpu = cpuOf(body, "soma");
+    expect(cpu.map((s: { label: string }) => s.label)).toEqual(["Sin script", "mohamed-boraei", "soma-web", "soma-web-staging"]);
+    const soma = cpu.find((s: { script: string }) => s.script === "soma-web");
+    expect(point(soma.p50, TODAY)).toBe(2);
+    expect(point(soma.p99, TODAY)).toBe(12.5);
+    expect(point(soma.p50, YESTERDAY)).toBe(1.5);
+    expect(soma.p50).toHaveLength(30);
+    const staging = cpu.find((s: { script: string }) => s.script === "soma-web-staging");
+    expect(point(staging.cut, TODAY)).toBe(5);
+    expect(fake.calls.filter((c) => c.op === "AccountCpu")).toHaveLength(3);
+    expect(fake.calls.find((c) => c.op === "AccountCpu")?.variables).toEqual({ tag: cobtec.accountId });
+  });
+
+  it("R21 leaves a day never processed empty, never 0, and gives 0 cut on a processed day where the script ran nothing", async () => {
+    await saveCpuDays(db, somaAccount, { [YESTERDAY]: [row("soma-web-staging", 3, 9, 0)] }, NOW);
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/usage"));
+    const soma = cpuOf(body, "soma").find((s: { script: string }) => s.script === "soma-web");
+    expect(point(soma.cut, YESTERDAY)).toBe(0);
+    expect(point(soma.p50, YESTERDAY)).toBeNull();
+    expect(point(soma.cut, "2026-10-27")).toBeNull();
+    expect(point(soma.p99, "2026-10-27")).toBeNull();
+  });
+
+  it("keeps the plan usage and the stored CPU when the live CPU read fails, and logs only the described error", async () => {
+    await saveCpuDays(db, somaAccount, { [YESTERDAY]: [row("soma-web", 1.5, 20, 0)] }, NOW);
+    const fake = fakeCloudflare({ cpu: () => new Response("secret raw body", { status: 503 }) });
+    const body = await json(await get(appWith(fake), "/api/usage"));
+    expect(body.notice).not.toBeNull();
+    expect(body.accounts.every((a: { live: boolean }) => a.live)).toBe(true);
+    expect(body.accounts[0].rows[0]).toMatchObject({ metric: "requests", usage: 900 });
+    const soma = cpuOf(body, "soma").find((s: { script: string }) => s.script === "soma-web");
+    expect(point(soma.p50, YESTERDAY)).toBe(1.5);
+    expect(point(soma.p50, TODAY)).toBeNull();
+    const logged = JSON.stringify(errorSpy.mock.calls);
+    expect(logged).toContain("live workers cpu failed");
+    expect(logged).not.toContain("secret raw body");
+    expect(logged).not.toContain(env.CLOUDFLARE_ANALYTICS_TOKEN);
+  });
+
+  it("reuses the live CPU read for 60 seconds", async () => {
+    const fake = fakeCloudflare();
+    const app = appWith(fake);
+    await get(app, "/api/usage");
+    await get(app, "/api/sites/soma");
+    expect(fake.calls.filter((c) => c.op === "AccountCpu")).toHaveLength(3);
+  });
+
+  it("R9 R15 gives a site only its own scripts, without their names", async () => {
+    await saveSiteDay(db, storedDay(YESTERDAY));
+    await saveCpuDays(db, somaAccount, { [YESTERDAY]: [row("soma-web", 1.5, 20, 0), row("soma-web-staging", 99, 999, 50)] }, NOW);
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/sites/soma"));
+    expect(body.hasWorkers).toBe(true);
+    expect(body.includesUnknown).toBe(false);
+    expect(body.cpu[YESTERDAY]).toEqual({ cpuP50Ms: 1.5, cpuP99Ms: 20, exceededResources: 0 });
+    expect(body.cpu[TODAY]).toEqual({ cpuP50Ms: 2, cpuP99Ms: 12.5, exceededResources: 0 });
+    expect(body.cpu["2026-10-27"]).toBeNull();
+    expect(JSON.stringify(body)).not.toContain("staging");
+    expect(JSON.stringify(body)).not.toContain("soma-web");
+  });
+
+  it("R15 R18 gives MOHAMED-BORAEI the highest figures of its scripts and the sum of their requests cut", async () => {
+    await saveCpuDays(db, boraeiAccount, { [YESTERDAY]: [row("mohamed-boraei", 8.7, 109, 0), row("__unknown__", 8.1, 29, 103)] }, NOW);
+    const body = await json(await get(appWith(fakeCloudflare()), "/api/sites/mohamed-boraei"));
+    expect(body.includesUnknown).toBe(true);
+    expect(body.cpu[YESTERDAY]).toEqual({ cpuP50Ms: 8.7, cpuP99Ms: 109, exceededResources: 103 });
+    expect(body.cpu[TODAY]).toEqual({ cpuP50Ms: 6, cpuP99Ms: 9, exceededResources: 3 });
+  });
+
+  it("R19 gives BORAEI no CPU and reads none", async () => {
+    const fake = fakeCloudflare();
+    const body = await json(await get(appWith(fake), "/api/sites/boraei"));
+    expect(body.hasWorkers).toBe(false);
+    expect(body.cpu).toBeNull();
+    expect(fake.calls.filter((c) => c.op === "AccountCpu")).toHaveLength(0);
   });
 });

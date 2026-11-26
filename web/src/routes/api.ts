@@ -6,7 +6,9 @@ import sitesJson from "../../config/sites.json";
 import type { AccessVariables } from "../access";
 import { describeError, graphql, GraphQLError } from "../cloudflare/graphql";
 import {
+  accountCpuQuery,
   accountUsageQuery,
+  type AccountCpuData,
   siteDayQuery,
   siteVisitsQuery,
   type AccountUsageData,
@@ -15,8 +17,9 @@ import {
 } from "../cloudflare/queries";
 import { verifyToken } from "../cloudflare/token";
 import { recordAudit } from "../db/audit";
-import { readSiteDayDetail, readSiteTraffic, readUsage, zoneDatasets, type TrafficTotals } from "../db/statistics";
+import { readCpu, readSiteDayDetail, readSiteTraffic, readUsage, zoneDatasets, type ScriptCpu, type TrafficTotals } from "../db/statistics";
 import { PAST_TTL_MS, TtlCache } from "../logic/cache";
+import { accountCpuSeries, parseCpu, siteCpuDays, UNKNOWN_SCRIPT } from "../logic/cpu";
 import { chartDays, dayRange, utcDay, workerDays } from "../logic/days";
 import { liveReadNotice } from "../logic/notices";
 import { dayPoints, mergeHistory, panelSummary, siteSummary, usageCharts } from "../logic/series";
@@ -105,6 +108,43 @@ export function apiRoutes(deps: ApiDeps = {}) {
   }
 
   /**
+   * Workers CPU of the given accounts over the chart days (spec 004 R9, R21): stored days from D1 and today
+   * read live in a query of its own, so a failure never touches the plan usage. Nothing read here is stored.
+   */
+  async function accountsCpu(env: Env, now: Date, accountIds: string[]) {
+    const today = utcDay(now);
+    const stored = await readCpu(env.STATS_DB, chartDays(now)[0]!);
+    const results = await Promise.allSettled(
+      accountIds.map((accountId) =>
+        cache.get<ScriptCpu[]>(`cpu:${accountId}:${today}`, now.getTime(), async () => {
+          const data = await graphql<AccountCpuData>(requireToken(env), accountCpuQuery([today]), { tag: accountId }, fetchFn);
+          const parsed = parseCpu(data, [today])[today];
+          if (!parsed) throw new GraphQLError("query", "Workers CPU of today missing from the response");
+          return parsed;
+        }),
+      ),
+    );
+
+    let failed = false;
+    let rejected = false;
+    const days: Record<string, Record<string, ScriptCpu[]>> = {};
+    accountIds.forEach((accountId, i) => {
+      const result = results[i]!;
+      const accountDays = { ...(stored[accountId] ?? {}) };
+      if (result.status === "fulfilled") accountDays[today] = result.value;
+      else {
+        // Today stays "Sin dato": the stored days are still shown.
+        delete accountDays[today];
+        failed = true;
+        rejected ||= tokenRejected(result.reason);
+        console.error("live workers cpu failed", { account: accountId, error: describeError(result.reason) });
+      }
+      days[accountId] = accountDays;
+    });
+    return { days, failed, rejected };
+  }
+
+  /**
    * Daily visits of one site for the chart days (R26, R35): stored days, and the missing ones read from
    * Cloudflare one day per part of a single query, without storing them. `today` is the live figure when the
    * caller already has it; otherwise today is read too.
@@ -143,10 +183,17 @@ export function apiRoutes(deps: ApiDeps = {}) {
     const now = clock();
     await recordAudit(c.env.AUDIT_DB, { email: c.get("email"), action: "view", target: "usage" }, now);
 
-    const usage = await accountsUsage(c.env, now);
+    const [usage, cpu] = await Promise.all([accountsUsage(c.env, now), accountsCpu(c.env, now, sitesJson.accounts.map((a) => a.accountId))]);
     return c.json({
-      accounts: usage.accounts.map((a) => ({ id: a.id, name: a.name, live: a.live, ...a.table, charts: a.charts })),
-      notice: usage.failed ? liveReadNotice(usage.rejected, usage.lastDay) : null,
+      accounts: usage.accounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        live: a.live,
+        ...a.table,
+        charts: a.charts,
+        cpu: accountCpuSeries(cpu.days[a.accountId] ?? {}, now),
+      })),
+      notice: usage.failed || cpu.failed ? liveReadNotice(usage.rejected || cpu.rejected, usage.lastDay) : null,
     });
   });
 
@@ -215,6 +262,14 @@ export function apiRoutes(deps: ApiDeps = {}) {
 
     // R26: the chart reuses today's live figure; only the days missing from D1 are read.
     const visits = await siteVisits(c.env, site, now, stored.traffic, traffic[today]?.visits ?? null);
+    // Spec 004: only the site's own scripts, and never their names (R9). A site without scripts reads nothing.
+    let cpu: Record<string, unknown> | null = null;
+    if (site.scripts.length) {
+      const accountCpu = await accountsCpu(c.env, now, [site.accountId]);
+      if (accountCpu.failed) notice ??= liveReadNotice(accountCpu.rejected, stored.days.at(-1) ?? null);
+      cpu = siteCpuDays(site, accountCpu.days[site.accountId] ?? {}, now);
+    }
+
     const datasets = await zoneDatasets(c.env.STATS_DB, site.zoneTag);
     const unavailable = datasetNotice(datasets.httpRequestsAdaptiveGroups);
     const detail = selectedDay && !unavailable ? await readSiteDayDetail(c.env.STATS_DB, site.id, selectedDay) : null;
@@ -224,6 +279,9 @@ export function apiRoutes(deps: ApiDeps = {}) {
       name: site.name,
       notice,
       traffic: trafficTable(traffic, now),
+      hasWorkers: site.scripts.length > 0,
+      includesUnknown: site.scripts.includes(UNKNOWN_SCRIPT),
+      cpu,
       visits: visits.points,
       pageViewsNotice: datasetNotice(datasets.httpRequests1dGroups),
       days: stored.days,

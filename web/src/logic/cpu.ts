@@ -2,6 +2,8 @@
 // figure per script and day. Pure: the daily task and the routes only store or show what this returns.
 import { dayAlias, type AccountCpuData, type CpuPartRow, type StatusPartRow } from "../cloudflare/queries";
 import type { ScriptCpu } from "../db/statistics";
+import { chartDays } from "./days";
+import { dayPoints, type DayPoint } from "./series";
 import type { SiteConfig } from "./traffic";
 
 /** Status of the invocations Cloudflare cut for exceeding resources (discovery of 2026-11-24). */
@@ -107,4 +109,39 @@ export function parseCpu(data: AccountCpuData, days: string[]): Record<string, S
     out[day] = [...scripts.values()].sort((a, b) => a.script.localeCompare(b.script));
   }
   return out;
+}
+
+/** Daily series of one script of an account, for the "Consumo de planes" cards (R10–R12). */
+export interface ScriptCpuSeries {
+  script: string;
+  label: string;
+  p50: DayPoint[];
+  p99: DayPoint[];
+  cut: DayPoint[];
+}
+
+/**
+ * One series per script of an account over the chart days, staging and `__unknown__` included (R10–R12, R21).
+ * A day never processed is a gap in every series; a processed day where the script ran nothing has no quantiles
+ * and 0 requests cut.
+ */
+export function accountCpuSeries(accountDays: Record<string, ScriptCpu[]>, now: Date): ScriptCpuSeries[] {
+  const days = chartDays(now).filter((day) => accountDays[day]);
+  const names = [...new Set(days.flatMap((day) => accountDays[day]!.map((s) => s.script)))].sort((a, b) => a.localeCompare(b));
+  return names.map((script) => {
+    const values = (pick: (s: ScriptCpu | undefined) => number | null) =>
+      Object.fromEntries(days.map((day) => [day, pick(accountDays[day]!.find((s) => s.script === script))]));
+    return {
+      script,
+      label: scriptLabel(script),
+      p50: dayPoints(values((s) => s?.cpuP50Ms ?? null), now),
+      p99: dayPoints(values((s) => s?.cpuP99Ms ?? null), now),
+      cut: dayPoints(values((s) => s?.exceededResources ?? 0), now),
+    };
+  });
+}
+
+/** A site's CPU for every chart day, keyed by day (R9, R15, R21). */
+export function siteCpuDays(site: Pick<SiteConfig, "scripts">, accountDays: Record<string, ScriptCpu[]>, now: Date): Record<string, SiteCpuDay | null> {
+  return Object.fromEntries(chartDays(now).map((day) => [day, siteCpuDay(site, accountDays, day)]));
 }
