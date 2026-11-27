@@ -5,7 +5,8 @@ monitor-cbt is **a single Cloudflare Worker** (`monitor-cbt`) in the COBTEC acco
 `monitor-cbt.<subdomain>.workers.dev` URL; `monitor.cobtec.net` is a GoDaddy redirect (301, unmasked) to it. It does three things:
 1. **Serves the UI** (React, CBT design, light and dark themes): an animated landing with a module selector (today only
    "Cloudflare - Consumo y Tráfico") that leads to each monitoring dashboard: a general panel (`/panel`) with a card per site,
-   "Consumo de planes" with usage bars and daily charts against each limit, and a page per site with its daily visits.
+   "Consumo de planes" with usage bars, daily charts against each limit and the Workers CPU per script (p50, p99 and
+   requests cut), and a page per site with its daily visits and the CPU of its own Workers.
    Every screen adapts to phone width. Further API-based monitoring modules can be added later.
 2. **Exposes its own API** (`/api/*`), which only answers authenticated users.
 3. **Runs a daily scheduled task** that, at 01:00 UTC (20:00 ECT, one hour after the day closes), copies the previous
@@ -52,7 +53,9 @@ flowchart LR
    completes recent data from the GraphQL API (the current month and the last week, today being partial; nothing of it
    is stored), reads from GraphQL the chart days still missing in D1 (up to 29 days back), and adds the token's remaining days.
 3. **Daily task:** at 01:00 UTC (20:00 ECT) the Worker requests the previous day from
-   GraphQL for each account and zone → stores it in D1 → deletes IPs older than 13 months. If a day
+   GraphQL for each account and zone → stores it in D1 → deletes IPs older than 13 months. The Workers CPU of each
+   account goes in a query of its own (yesterday plus up to 13 missing days), so a failure there never touches the
+   plan usage. If a day
    fails, the next run fills in the missing days while the API still retains them.
 4. **Export:** the UI builds the Excel or PDF file in the browser from the data already on screen,
    and notifies the API so the export is recorded in the audit log.
@@ -100,4 +103,5 @@ with the app, so the browser never calls Google Fonts.
 | 2026-10-31 | Worker requests never read from a day that began 29.5 days ago or more; recovery up to 29 days back (changed 2026-11-02, spec 003: it was "the last 8 days") | A range reaching a day about 30 days old is sampled coarsely and showed a false 0 (P11) |
 | 2026-11-02 | Visits and Worker requests read one day per part of a single GraphQL query (aliases) | A 29-day range is sampled coarsely; one day per part gives exact per-day figures in under a second |
 | 2026-11-02 | Past days read from Cloudflare kept one hour in the Worker's memory (live reads: 60 seconds) | Past days no longer change; fewer queries when moving between screens |
+| 2026-11-25 | Workers CPU read in a GraphQL query of its own per account, at most 14 days (spec 004) | One account query with about 63 parts was refused for querying too many nodes and failed the usage too; separate queries keep usage safe |
 | 2026-10-31 | Charts are hand-written SVG, no chart library; the "CBT Monitoreo" prototype rules over the design system where they differ | No new dependencies; the prototype is the owner's approved look |

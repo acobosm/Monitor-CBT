@@ -3,9 +3,9 @@
 ## Data stores
 | Store | Contents |
 |---|---|
-| D1 `monitor-cbt-statistics-db` | Daily history of plan usage, traffic per site, countries and top IPs. |
+| D1 `monitor-cbt-statistics-db` | Daily history of plan usage, Workers CPU per script, traffic per site, countries and top IPs. |
 | D1 `monitor-cbt-audit-db` | Audit log: data views and exports. Kept separate so restoring statistics (Time Travel) never erases audit records, and so it can be backed up and exported on its own. |
-| Config file in the repo `web/config/sites.json` | Monitored accounts and sites (id, name, account ID, zone, zone ID). Changed by commit; rarely changes. |
+| Config file in the repo `web/config/sites.json` | Monitored accounts and sites (id, name, account ID, zone, zone ID, Workers scripts). Changed by commit; rarely changes. |
 | Config file in the repo (e.g. `web/config/limits.json`) | Free plan limits, each with the date it was checked on the provider's pricing page. Changed by commit, so changes have history. |
 | Worker secret `ALLOWED_EMAILS` (and `web/.dev.vars` locally) | Allowed emails with their role. Not in the repo: emails are personal data. |
 | Worker secret `CLOUDFLARE_ANALYTICS_TOKEN` (and `web/.dev.vars` locally) | Read-only Cloudflare analytics token. |
@@ -30,6 +30,7 @@ because its DNS is at GoDaddy.
 | sites[].zone | text | yes | no | Zone name (e.g. `somabwc.com`). |
 | sites[].zoneTag | text | yes | no | Zone ID, required by GraphQL. |
 | sites[].host | text | no | no | Hostname filter for traffic: only `www.mohamedboraei.com` (its apex only redirects; on 2026-10-28 the zone had 5,364 visitor requests, 1,561 of them to www). |
+| sites[].scripts | list of text | yes | no | Workers scripts whose CPU belongs to the site (spec 004): SOMA `soma-web`; BORAEI none (static assets only); MOHAMED-BORAEI `mohamed-boraei` and `__unknown__`. Staging scripts are never listed: they show only at account level. A site's page never gets figures of scripts not listed for it. |
 
 ### usage_daily (`monitor-cbt-statistics-db`)
 | Field | Type | Required | Sensitive | Description |
@@ -96,6 +97,33 @@ An IP with more than one security action that day keeps the one with most events
 
 Key: (scope, tag, dataset). Refreshed on every daily run.
 
+### workers_cpu_daily (`monitor-cbt-statistics-db`, spec 004)
+| Field | Type | Required | Sensitive | Description |
+|---|---|---|---|---|
+| day | text | yes | no | UTC day. |
+| account_id | text | yes | no | Cloudflare account ID. |
+| script | text | yes | no | `scriptName`; `__unknown__` when Cloudflare gives none (shown as "Sin script"). Staging scripts included. |
+| requests | integer | yes | no | Invocations of the script that day. |
+| errors | integer | yes | no | Invocations that ended in error. |
+| exceeded_resources | integer | yes | no | Invocations Cloudflare cut for exceeding resources (`status = exceededResources`), shown as "Cortadas". |
+| cpu_p50_ms, cpu_p99_ms, cpu_p999_ms | real | no | no | CPU time per invocation, percentiles 50, 99 and 99.9, in ms (Cloudflare gives µs; divided by 1,000, decimals kept). Empty for a script seen only among the cut invocations. |
+| wall_p50_ms, wall_p99_ms | real | no | no | Wall time per invocation, percentiles 50 and 99, in ms. |
+| sample_interval | real | no | no | Average sample interval: 1 = exact, above 1 = percentiles estimated from a sample. |
+| fetched_at | text | yes | no | When it was read from the API. |
+
+Key: (day, account_id, script). Times and counts cannot be negative and `sample_interval` is at least 1 (CHECK).
+
+### workers_cpu_checked (`monitor-cbt-statistics-db`, spec 004)
+| Field | Type | Required | Sensitive | Description |
+|---|---|---|---|---|
+| day | text | yes | no | UTC day. |
+| account_id | text | yes | no | Cloudflare account ID. |
+| fetched_at | text | yes | no | When it was processed. |
+
+Key: (day, account_id). A processed day, even with no invocations, so it is not read again every day. A day here
+without rows in `workers_cpu_daily` had no invocations (0 cut, no percentiles); a day missing here was never read and
+shows "Sin dato", never a 0.
+
 ### audit_event (`monitor-cbt-audit-db`)
 | Field | Type | Required | Sensitive | Description |
 |---|---|---|---|---|
@@ -109,12 +137,13 @@ Key: (scope, tag, dataset). Refreshed on every daily run.
 ## Sensitivity and retention
 | Data | Sensitive? | Retention | On expiry |
 |---|---|---|---|
-| Usage, traffic and countries | No (confidential per client) | No limit for now; reviewed against D1 storage | — |
+| Usage, Workers CPU, traffic and countries | No (confidential per client) | No limit for now; reviewed against D1 storage | — |
 | Visitor IPs (`ip_daily.ip`) | **Yes, personal data** | 13 months | Deleted by the daily task |
 | Email in the audit log (`audit_event.email`) | **Yes, personal data** | No automatic deletion for now | Reviewed as usage grows |
 
 Size estimate (after T3, 3 sites): about 300 rows per day (usage 27, traffic 3, countries ~150,
-IPs up to 120), roughly 30 KB per day or 11 MB per year. First real data (2026-10-31): 515 rows written in the day, against the
+IPs up to 120), roughly 30 KB per day or 11 MB per year. Workers CPU (spec 004) adds about 6 rows per day for the
+3 accounts plus 3 `checked` rows, a few hundred bytes. First real data (2026-10-31): 515 rows written in the day, against the
 100,000 limit, and 106.5 KB across both databases; one day is too little to replace the estimate. D1 Free plan limit: 500 MB per
 database (checked on 2026-10-28 at developers.cloudflare.com/d1/platform/limits).
 
@@ -128,6 +157,8 @@ confirmed with a legal advisor, together with whether the clients' privacy polic
 - Processing a day again replaces it (R30): usage, countries and IPs of that day are deleted and inserted
   again inside the batch, so rows that disappeared in the new run do not stay; traffic is upserted.
 - The write keeps only the top 20 IPs per kind, ordered by requests and then by IP (R29).
+- Workers CPU (`saveCpuDays`, spec 004): one batch per account with every day read; each day's rows are deleted and
+  inserted again, and the day is marked in `workers_cpu_checked`.
 
 ## GraphQL sources (T3 discovery, 2026-10-29)
 Checked with the `settings` node and one real read per account and zone. All datasets below are
@@ -144,6 +175,7 @@ enabled on the Free plan for the 3 accounts and 3 zones.
 | Top IPs by traffic | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `clientCountryName`; then `datetimeHour` for the top 20 | 31 days | 30 days |
 | Top IPs by security | `httpRequestsAdaptiveGroups` | `count` by `clientIP`, `securityAction` (`securityAction_neq: "unknown"`); `block` → "Bloqueada", any `*challenge*` → "Desafiada", others (log, skip…) ignored | 31 days | 30 days |
 | Page views | `httpRequests1dGroups` | `sum.pageViews` | 365 days | 365 days |
+| Workers CPU per script (spec 004, discovery of 2026-11-24) | `workersInvocationsAdaptive` | `sum.requests`, `sum.errors`, `quantiles.cpuTimeP50/P99/P999`, `quantiles.wallTimeP50/P99` (µs), `avg.sampleInterval` by `scriptName`; `sum.requests` by `scriptName` and `status` for `exceededResources` | 90 days | 32 days |
 
 - `firewallEventsAdaptiveGroups` is **disabled** on Free; `firewallEventsAdaptive` (raw events) is enabled
   but not used, because grouped requests give the same counts and are not cut at 10,000 rows.
@@ -153,6 +185,17 @@ enabled on the Free plan for the 3 accounts and 3 zones.
 - "History" is counted back from the query time, so recovery covers 29 complete days (P6, P11).
 - History in D1 starts on the first run of the daily task: the past that Cloudflare still keeps is not copied (P9).
 - Account datasets keep 90 days, more than the 29-day backfill.
+- Workers CPU goes in a query of its own per account (`AccountCpu`), at most 14 days (28 parts). On 2026-11-25 one
+  account query with about 63 parts was refused ("In combination, your request queries too many nodes, zones and
+  accounts") and took the plan usage down with it; Cloudflare documents no number, queries of up to about 34 parts
+  work. So the daily task reads yesterday plus the 13 oldest missing days, filling the 29 days in three runs.
+- `status` values seen: `success`, `clientDisconnected`, `exceededResources`. Static asset requests run no code and
+  do not appear in `workersInvocationsAdaptive`.
+- `__unknown__` (no `scriptName`) is assigned to MOHAMED-BORAEI because `mohamed-boraei` is the only Worker with code
+  in the BORAEI account (P2 of spec 004). If another Worker with code is added to that account (e.g. a CMS for
+  boraei.com), this mapping must be reviewed.
+- Cloudflare does not cut every invocation above the 10 ms CPU of Workers Free: p99 values of 29 to 273 ms showed no
+  cut. The danger signal is `exceededResources` above 0, and a p50 approaching 10 ms.
 
 ## Backups and restore
 Data older than the Cloudflare API retention cannot be fetched again: if it is lost from D1, it is
