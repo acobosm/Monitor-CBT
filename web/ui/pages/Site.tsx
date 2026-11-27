@@ -1,17 +1,44 @@
 import { useEffect, useState } from "react";
-import { useApi, type IpRow, type SiteData } from "../api";
+import { useApi, type IpRow, type SiteCpuDay, type SiteData } from "../api";
 import { Card } from "../components/Card";
 import { DataTable, type Column } from "../components/DataTable";
 import { LineChart } from "../components/LineChart";
 import { Loaded } from "../components/Loaded";
 import { Notice } from "../components/Notice";
-import { countryFlag, formatBytes, formatDay, formatNumber, formatPercent, NO_VALUE } from "../format";
+import { StatusBadge } from "../components/StatusBadge";
+import { countryFlag, formatBytes, formatDay, formatDecimal, formatNumber, formatPercent, NO_VALUE, TEXT_NO_DATA } from "../format";
 
 export const TEXT_NO_DAYS = "Aún no hay días guardados.";
 /** R25. */
 export const TEXT_SITE_REQUESTS_INFO = "Todas las peticiones de visitantes al sitio. No cuenta para el límite de Workers.";
 
 type TrafficRow = SiteData["traffic"]["rows"][number];
+
+/** Spec 004 R18. */
+export const TEXT_UNKNOWN_CUT_INFO = "Incluye peticiones que Cloudflare cortó sin asignarles script.";
+/** Spec 004 R19. */
+export const TEXT_NO_WORKERS = "Sin código en Workers (solo archivos estáticos)";
+export const TEXT_CUT = "Cortadas";
+
+const cpuValue = (cpu: SiteCpuDay | null | undefined, value: number | null | undefined) =>
+  !cpu || value === null || value === undefined ? TEXT_NO_DATA : formatDecimal(value);
+
+/** R16: above 0 the cell says "Cortadas" with the figure, never color alone; R21: no figure reads "Sin dato". */
+function CutCell({ cpu }: { cpu: SiteCpuDay | null | undefined }) {
+  if (!cpu) return <>{TEXT_NO_DATA}</>;
+  if (cpu.exceededResources === 0) return <>{formatNumber(0)}</>;
+  return <StatusBadge level="red" text={`${TEXT_CUT}: ${formatNumber(cpu.exceededResources)}`} />;
+}
+
+/** Spec 004 R14, R17, R18: CPU p50, p99 and requests cut of the site's own scripts, without highlight on the CPU. */
+function cpuColumns(data: SiteData): Column<TrafficRow>[] {
+  const of = (r: TrafficRow) => data.cpu?.[r.day];
+  return [
+    { header: "CPU p50 (ms)", numeric: true, render: (r) => cpuValue(of(r), of(r)?.cpuP50Ms) },
+    { header: "CPU p99 (ms)", numeric: true, render: (r) => cpuValue(of(r), of(r)?.cpuP99Ms) },
+    { header: TEXT_CUT, info: data.includesUnknown ? TEXT_UNKNOWN_CUT_INFO : undefined, numeric: true, render: (r) => <CutCell cpu={of(r)} /> },
+  ];
+}
 
 const trafficColumns: Column<TrafficRow>[] = [
   { header: "Día", render: (r) => r.label },
@@ -88,7 +115,14 @@ export function SiteView({ data, onSelectDay }: { data: SiteData; onSelectDay: (
         <h3>Visitas diarias</h3>
         <LineChart points={data.visits} format={formatNumber} label={`Visitas diarias de ${data.name}, últimos 30 días`} />
       </Card>
-      <DataTable caption="Tráfico diario" columns={trafficColumns} rows={data.traffic.rows} rowKey={(r) => r.day} />
+      <DataTable
+        caption="Tráfico diario"
+        columns={data.hasWorkers ? [...trafficColumns, ...cpuColumns(data)] : trafficColumns}
+        rows={data.traffic.rows}
+        rowKey={(r) => r.day}
+      />
+      {/* R19: a site without Workers code has no CPU columns, and says why. */}
+      {data.hasWorkers ? null : <p className="note">{TEXT_NO_WORKERS}</p>}
       {data.pageViewsNotice ? <p className="note">Páginas vistas: {data.pageViewsNotice}</p> : null}
 
       {data.unavailableText ? (

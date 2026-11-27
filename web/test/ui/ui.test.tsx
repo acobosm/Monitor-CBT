@@ -8,7 +8,7 @@ import { FOOTER_TEXT, Layout, MENU_SITES } from "../../ui/components/Layout";
 import { TEXT_TOKEN_UNVERIFIED, TokenNoticeView } from "../../ui/components/TokenNotice";
 import { countryFlag, formatBytes, formatNumber, formatPercent } from "../../ui/format";
 import { Home, MODULE_NAME } from "../../ui/pages/Home";
-import { SiteView, TEXT_NO_DAYS } from "../../ui/pages/Site";
+import { SiteView, TEXT_CUT, TEXT_NO_DAYS, TEXT_NO_WORKERS, TEXT_UNKNOWN_CUT_INFO } from "../../ui/pages/Site";
 import { TEXT_NO_DATA, UsageView } from "../../ui/pages/Usage";
 import { parseRoute } from "../../ui/route";
 
@@ -69,6 +69,9 @@ const site: SiteData = {
   name: "SOMA",
   notice: null,
   visits: [],
+  hasWorkers: false,
+  includesUnknown: false,
+  cpu: null,
   traffic: {
     note: "Cada día va de 19:00 a 19:00 ECT.",
     rows: [
@@ -292,5 +295,74 @@ describe("R42 country flags", () => {
     expect(out.match(/<span class="flag" aria-hidden="true">🇪🇨<\/span>EC</g)).toHaveLength(2);
     expect(out).toContain(`<span class="flag" aria-hidden="true">🇺🇸</span>US<`);
     expect(out).toContain(`<td>T1</td>`);
+  });
+});
+
+describe("spec 004 R14 R16–R21 Workers CPU in Tráfico diario", () => {
+  const rows = [
+    { day: "2026-10-29", label: "Hoy (parcial)", partial: true, totals: null },
+    { day: "2026-10-28", label: "28/10/2026", partial: false, totals: null },
+    { day: "2026-10-27", label: "27/10/2026", partial: false, totals: null },
+    { day: "2026-10-26", label: "26/10/2026", partial: false, totals: null },
+  ];
+  const withCpu = (change: Partial<SiteData> = {}) =>
+    siteHtml({
+      traffic: { note: "", rows },
+      hasWorkers: true,
+      includesUnknown: false,
+      cpu: {
+        "2026-10-29": { cpuP50Ms: 0.87, cpuP99Ms: 90.39, exceededResources: 0 },
+        "2026-10-28": { cpuP50Ms: 8.66, cpuP99Ms: 108.96, exceededResources: 103 },
+        "2026-10-27": { cpuP50Ms: null, cpuP99Ms: null, exceededResources: 0 },
+        "2026-10-26": null,
+      },
+      ...change,
+    });
+  const table = (out: string) => out.slice(out.indexOf("Tráfico diario"), out.indexOf("</table>"));
+  const rowOf = (out: string, label: string) => {
+    const t = table(out);
+    const start = t.indexOf(`<td>${label}</td>`);
+    return t.slice(start, t.indexOf("</tr>", start));
+  };
+
+  it("R14 adds CPU p50 (ms), CPU p99 (ms) and Cortadas after Bytes", () => {
+    const t = table(withCpu());
+    const headers = [...t.matchAll(/<th[^>]*>([^<]+)/g)].map((m) => m[1]);
+    expect(headers.slice(-4)).toEqual(["Bytes", "CPU p50 (ms)", "CPU p99 (ms)", TEXT_CUT]);
+  });
+
+  it("R17 R20 shows CPU in es-EC with one decimal and no highlight", () => {
+    const today = rowOf(withCpu(), "Hoy (parcial)");
+    expect(today).toContain(">0,9</td>");
+    expect(today).toContain(">90,4</td>");
+    expect(rowOf(withCpu(), "28/10/2026")).toContain(">109,0</td>");
+    expect(today).not.toContain("badge");
+  });
+
+  it("R16 highlights Cortadas above 0 with the word and the figure, and shows a plain 0 otherwise", () => {
+    expect(rowOf(withCpu(), "28/10/2026")).toContain(`<span class="badge level-red">Cortadas: 103</span>`);
+    expect(rowOf(withCpu(), "Hoy (parcial)")).toMatch(/>0<\/td>$/);
+  });
+
+  it("R21 shows Sin dato for a day never read, and for the CPU of a day without Worker requests", () => {
+    expect(rowOf(withCpu(), "26/10/2026").match(/>Sin dato<\/td>/g)).toHaveLength(3);
+    const empty = rowOf(withCpu(), "27/10/2026");
+    expect(empty.match(/>Sin dato<\/td>/g)).toHaveLength(2);
+    expect(empty).toMatch(/>0<\/td>$/);
+  });
+
+  it("R18 puts the (i) next to Cortadas only when the site includes requests without a script", () => {
+    expect(TEXT_UNKNOWN_CUT_INFO).toBe("Incluye peticiones que Cloudflare cortó sin asignarles script.");
+    expect(withCpu({ includesUnknown: true })).toContain(`${TEXT_CUT}<span class="info-tip">`);
+    expect(withCpu({ includesUnknown: true })).toContain(TEXT_UNKNOWN_CUT_INFO);
+    expect(withCpu()).not.toContain(TEXT_UNKNOWN_CUT_INFO);
+  });
+
+  it("R19 shows no CPU columns for a site without Workers, and says why", () => {
+    const out = siteHtml({ traffic: { note: "", rows }, hasWorkers: false, cpu: null });
+    expect(out).not.toContain("CPU p50");
+    expect(out).not.toContain(`>${TEXT_CUT}<`);
+    expect(out).toContain(TEXT_NO_WORKERS);
+    expect(withCpu()).not.toContain(TEXT_NO_WORKERS);
   });
 });

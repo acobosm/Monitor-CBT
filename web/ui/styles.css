@@ -437,6 +437,16 @@ main {
   transform: translateX(-50%);
 }
 
+/* In a table's last column the message grows to the left, so the table's scroll box never cuts it (spec 004 R18).
+   Narrow screens already show every message fixed at the bottom of the screen. */
+@media (min-width: 861px) {
+  th:last-child .info-tip [role="tooltip"] {
+    right: 0;
+    left: auto;
+    transform: none;
+  }
+}
+
 .info-tip:hover [role="tooltip"],
 .info-tip button:focus-visible + [role="tooltip"],
 .info-tip button[aria-expanded="true"] + [role="tooltip"] {

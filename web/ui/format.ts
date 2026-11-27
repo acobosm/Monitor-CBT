@@ -23,6 +23,11 @@ export function formatBytes(value: number | null | undefined): string {
   return `${unit === 0 ? numbers.format(scaled) : oneDecimal.format(scaled)} ${units[unit]}`;
 }
 
+/** Spec 004 R20: a figure with one decimal and no unit, for columns whose header names the unit. */
+export function formatDecimal(value: number | null | undefined): string {
+  return value === null || value === undefined ? NO_VALUE : oneDecimal.format(value);
+}
+
 /** Spec 004 R20: milliseconds with one decimal, e.g. "8,7 ms". */
 export function formatMs(value: number | null | undefined): string {
   return value === null || value === undefined ? NO_VALUE : `${oneDecimal.format(value)} ms`;

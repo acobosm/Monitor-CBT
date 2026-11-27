@@ -11,7 +11,7 @@ const days = (values: (number | null)[]) => values.map((v, i) => point(`2026-10-
 
 describe("R26 site chart", () => {
   it("shows on each site's page the daily visits chart, above the daily traffic table", () => {
-    const site = { id: "soma", name: "SOMA", notice: null, traffic: { note: "", rows: [] }, visits: days([5, 7, 3]), pageViewsNotice: null, days: [], selectedDay: null, unavailableText: null, countries: [], topTrafficIps: [], topSecurityIps: [] } as SiteData;
+    const site = { id: "soma", name: "SOMA", notice: null, traffic: { note: "", rows: [] }, visits: days([5, 7, 3]), hasWorkers: false, includesUnknown: false, cpu: null, pageViewsNotice: null, days: [], selectedDay: null, unavailableText: null, countries: [], topTrafficIps: [], topSecurityIps: [] } as SiteData;
     const out = html(<SiteView data={site} onSelectDay={() => {}} />);
     expect(out).toContain("Visitas diarias");
     expect(out.indexOf(`class="line-chart"`)).toBeLessThan(out.indexOf("Tráfico diario"));

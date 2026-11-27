@@ -79,6 +79,12 @@ export interface IpRow {
   lastSeen: string | null;
 }
 
+export interface SiteCpuDay {
+  cpuP50Ms: number | null;
+  cpuP99Ms: number | null;
+  exceededResources: number;
+}
+
 export interface SiteData {
   id: string;
   name: string;
@@ -88,6 +94,12 @@ export interface SiteData {
     rows: { day: string; label: string; partial: boolean; totals: TrafficTotals | null }[];
   };
   visits: DayPoint[];
+  /** Spec 004: false when the site serves static assets only (R19). */
+  hasWorkers: boolean;
+  /** The site's figures include requests Cloudflare cut without a script (R18). */
+  includesUnknown: boolean;
+  /** CPU per day of the site's own scripts; null for a day never read (R21), and for the whole site without Workers. */
+  cpu: Record<string, SiteCpuDay | null> | null;
   pageViewsNotice: string | null;
   days: string[];
   selectedDay: string | null;
