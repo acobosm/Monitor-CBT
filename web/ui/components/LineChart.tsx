@@ -79,18 +79,22 @@ export function pointText(point: DayPoint, format: (value: number | null) => str
 export interface ChartSeries {
   name: string;
   points: DayPoint[];
+  /** Color slot (1–3) that follows the entity across charts; by default, the series' position. */
+  slot?: number;
 }
 
 /**
  * One series by `points`, or several by `series` (one per account, same days). Several series get a legend and
  * their own validated colors, so identity never rests on color alone; the readout lists every series at that day.
  */
-export function LineChart({ points, series, format, limit, label }: {
+export function LineChart({ points, series, format, limit, limitLabel = "Límite", label }: {
   points?: DayPoint[];
   series?: ChartSeries[];
   format: (value: number | null) => string;
   /** R28: dashed "Límite" line; omitted for charts without a limit. */
   limit?: number;
+  /** Text of the limit line, "Límite" by default. */
+  limitLabel?: string;
   label: string;
 }) {
   const [active, setActive] = useState<number | null>(null);
@@ -105,6 +109,8 @@ export function LineChart({ points, series, format, limit, label }: {
   }, []);
   const lines = series ?? [{ name: label, points: points ?? [] }];
   const several = lines.length > 1;
+  // A series with its own slot keeps its color and its name in the legend even when it is alone.
+  const named = several || lines.some((l) => l.slot !== undefined);
   if (!lines.some((l) => hasData(l.points))) return <p className="note">{TEXT_NO_CHART_DATA}</p>;
 
   const days = lines[0]!.points;
@@ -122,16 +128,20 @@ export function LineChart({ points, series, format, limit, label }: {
     const share = box.width ? (event.clientX - box.left) / box.width : 0;
     setActive(Math.min(last, Math.max(0, Math.round(share * last))));
   };
-  const seriesClass = (n: number) => (several ? `series s${n + 1}` : "series");
+  const seriesClass = (n: number) => {
+    const l = lines[n]!;
+    if (!named) return "series";
+    return `series s${l.slot ?? n + 1}`;
+  };
 
   return (
     <figure className="line-chart">
       {limit !== undefined && !limitShown ? (
         <figcaption className="note">
-          Límite: {format(limit)} <span className="rescaled">({TEXT_RESCALED})</span>
+          {limitLabel}: {format(limit)} <span className="rescaled">({TEXT_RESCALED})</span>
         </figcaption>
       ) : null}
-      {several ? (
+      {named ? (
         <ul className="legend">
           {lines.map((l, n) => (
             <li key={l.name}>
@@ -141,6 +151,14 @@ export function LineChart({ points, series, format, limit, label }: {
               {l.name}
             </li>
           ))}
+          {limitShown ? (
+            <li className="limit">
+              <svg width="16" height="8" aria-hidden="true">
+                <line x1="1" x2="15" y1="4" y2="4" />
+              </svg>
+              {limitLabel}
+            </li>
+          ) : null}
         </ul>
       ) : null}
       <div className="line-chart-frame" ref={frame}>
@@ -161,9 +179,12 @@ export function LineChart({ points, series, format, limit, label }: {
           {limitShown ? (
             <g className="limit">
               <line x1={PAD.left} x2={width - PAD.right} y1={r(y(limit, scale))} y2={r(y(limit, scale))} />
-              <text x={width - PAD.right} y={r(y(limit, scale)) - 6} textAnchor="end">
-                Límite
-              </text>
+              {/* With a legend, the limit is named there, so its text never sits on top of the lines. */}
+              {named ? null : (
+                <text x={width - PAD.right} y={r(y(limit, scale)) - 6} textAnchor="end">
+                  {limitLabel}
+                </text>
+              )}
             </g>
           ) : null}
           {lines.map((l, n) => {
@@ -197,7 +218,7 @@ export function LineChart({ points, series, format, limit, label }: {
         </svg>
         {active !== null ? (
           <div className="chart-tip" role="status" style={{ left: `${(at(active) / width) * 100}%`, transform: tipShift(at(active) / width) }}>
-            {several ? (
+            {named ? (
               <>
                 <div>{days[active]!.partial ? TEXT_TODAY : formatDay(days[active]!.day)}</div>
                 {lines.map((l) => (

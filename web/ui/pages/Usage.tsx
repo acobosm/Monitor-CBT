@@ -7,7 +7,7 @@ import { Meter } from "../components/Meter";
 import { Loaded } from "../components/Loaded";
 import { Notice } from "../components/Notice";
 import { StatusBadge } from "../components/StatusBadge";
-import { formatBytes, formatNumber, formatPercent, NO_VALUE, TEXT_NO_DATA } from "../format";
+import { formatBytes, formatMs, formatNumber, formatPercent, NO_VALUE, TEXT_NO_DATA } from "../format";
 
 export { TEXT_NO_DATA };
 
@@ -135,6 +135,68 @@ function UsageCharts({ accounts }: { accounts: AccountUsage[] }) {
   );
 }
 
+export const TEXT_CPU_SECTION = "Workers · CPU";
+export const TEXT_P50_TITLE = "Workers · CPU típica por petición, p50 (ms)";
+export const TEXT_P99_TITLE = "Workers · CPU de las peticiones más pesadas, p99 (ms)";
+export const TEXT_CUT_TITLE = "Workers · Peticiones cortadas por límite de recursos";
+export const TEXT_CPU_LIMIT = "Límite por petición (Free)";
+/** CPU time per request of Workers Free: a reference line, not a state (spec 004 P1). */
+export const CPU_LIMIT_MS = 10;
+export const TEXT_P50_INFO =
+  "La mitad de las peticiones usa menos CPU que esta cifra: es la petición típica. Si se acerca a 10 ms, la mayoría de las visitas ya no cabe en Workers Free.";
+export const TEXT_P99_INFO =
+  "El 99 % de las peticiones usa menos CPU que esta cifra: muestra las más pesadas. Cloudflare tolera peticiones sueltas sobre 10 ms; la señal de peligro son las peticiones cortadas.";
+
+/**
+ * Spec 004 R10–R13: per account, three cards in a row: p50, p99 and requests cut, each with its own scale so the
+ * p50 is not flattened by the p99. Only the p50 card carries the 10 ms line (owner's choice, 2026-11-27). Each script keeps one color in the three cards and the legend names it.
+ */
+function CpuCharts({ account }: { account: AccountUsage }) {
+  const series = (pick: (s: AccountUsage["cpu"][number]) => AccountUsage["cpu"][number]["p50"]) =>
+    account.cpu.map((s, i) => ({ name: s.label, points: pick(s), slot: i + 1 }));
+  const chartLabel = (title: string) => `${title} de ${account.name}, últimos 30 días`;
+  return (
+    <section className="cpu-account">
+      <h3>{account.name}</h3>
+      <div className="usage-cards cpu-cards">
+        <Card className="chart-card">
+          <h4>
+            {TEXT_P50_TITLE}
+            <InfoTip text={TEXT_P50_INFO} />
+          </h4>
+          <LineChart series={series((s) => s.p50)} format={formatMs} limit={CPU_LIMIT_MS} limitLabel={TEXT_CPU_LIMIT} label={chartLabel(TEXT_P50_TITLE)} />
+        </Card>
+        <Card className="chart-card">
+          <h4>
+            {TEXT_P99_TITLE}
+            <InfoTip text={TEXT_P99_INFO} />
+          </h4>
+          {/* No 10 ms line: Cloudflare tolerates single requests above it, so on the p99 it would only look alarming. */}
+          <LineChart series={series((s) => s.p99)} format={formatMs} label={chartLabel(TEXT_P99_TITLE)} />
+        </Card>
+        <Card className="chart-card">
+          <h4>{TEXT_CUT_TITLE}</h4>
+          <LineChart series={series((s) => s.cut)} format={formatNumber} label={chartLabel(TEXT_CUT_TITLE)} />
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+/** Only accounts with a Worker seen in the chart days; nothing while no CPU day is stored yet. */
+function CpuSection({ accounts }: { accounts: AccountUsage[] }) {
+  const withCpu = accounts.filter((a) => a.cpu.length);
+  if (!withCpu.length) return null;
+  return (
+    <section>
+      <h2>{TEXT_CPU_SECTION}</h2>
+      {withCpu.map((account) => (
+        <CpuCharts key={account.id} account={account} />
+      ))}
+    </section>
+  );
+}
+
 export function UsageView({ data }: { data: UsageData }) {
   return (
     <>
@@ -146,6 +208,7 @@ export function UsageView({ data }: { data: UsageData }) {
         ))}
       </div>
       <UsageCharts accounts={data.accounts} />
+      <CpuSection accounts={data.accounts} />
       {/* R22: the full tables stay below the cards. */}
       {data.accounts.map((account) => (
         <AccountTable key={account.id} account={account} />

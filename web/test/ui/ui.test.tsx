@@ -59,6 +59,7 @@ const account: AccountUsage = {
   limitsCheckedText: "Límites verificados el 29 de octubre de 2026",
   unclassifiedText: null,
   charts: [],
+  cpu: [],
 };
 
 const usage = (a: Partial<AccountUsage> = {}, notice: string | null = null): UsageData => ({ accounts: [{ ...account, ...a }], notice });

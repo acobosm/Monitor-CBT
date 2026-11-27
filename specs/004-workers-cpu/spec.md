@@ -7,7 +7,7 @@ Show, per site, the CPU time per request of its Workers and the requests Cloudfl
 ## Scope
 - Daily task: store per day, account and script the requests, errors, requests cut (`exceededResources`), CPU p50/p99/p999 and wall time p50/p99, in milliseconds. The read goes inside the existing per-account query, with no new subrequests.
 - `web/config/sites.json`: each site lists the scripts whose CPU belongs to it. Staging scripts and `__unknown__` not assigned to a site are shown only at account level.
-- "Consumo de planes": a card "Workers · CPU por petición (ms)" with p50 and p99 and a dashed reference line at 10 ms, and a card "Workers · Peticiones cortadas por límite de recursos" with the daily count.
+- "Consumo de planes": per account, a p50 card with a dashed reference line at 10 ms, a p99 card, and a card "Workers · Peticiones cortadas por límite de recursos" with the daily count (P5).
 - Each site's page: columns CPU p50, CPU p99 and Cortadas in the "Tráfico diario" table. Only "Cortadas" is highlighted, when it is above 0.
 - Recovery of missing days up to 29 days back, as for Worker requests (P11 of spec 001).
 - Optional, last task: the current day per hour on each site's page, read live and not stored.
@@ -40,10 +40,10 @@ Show, per site, the CPU time per request of its Workers and the requests Cloudfl
 - R9. A site's page SHALL never show figures of scripts not listed for that site.
 
 ### "Consumo de planes"
-- R10. The system SHALL show, for each account, a card "Workers · CPU por petición (ms)" with one line for p50 and one for p99 per script of that account, and a dashed line at 10 ms labeled "Límite por petición (Free)" (P4).
-- R11. The system SHALL show, for each account, a card "Workers · Peticiones cortadas por límite de recursos" with the daily count of requests cut per script of that account (P4).
+- R10. The system SHALL show, for each account, a card "Workers · CPU típica por petición, p50 (ms)" and a card "Workers · CPU de las peticiones más pesadas, p99 (ms)", each with one line per script of that account and its own scale; only the p50 card SHALL carry a dashed line at 10 ms, named "Límite por petición (Free)" in its legend (P4, P5).
+- R11. The system SHALL show, for each account, a card "Workers · Peticiones cortadas por límite de recursos" with the daily count of requests cut per script of that account, after the p50 and p99 cards and in the same row while they fit (P4, P5).
 - R12. The system SHALL label the script `__unknown__` as "Sin script".
-- R13. An (i) next to the CPU card title SHALL say "La mitad de las peticiones usa menos CPU que p50 y el 99 % menos que p99. Cloudflare tolera peticiones sueltas sobre 10 ms; la señal de peligro son las peticiones cortadas."
+- R13. An (i) next to the p50 card title SHALL say "La mitad de las peticiones usa menos CPU que esta cifra: es la petición típica. Si se acerca a 10 ms, la mayoría de las visitas ya no cabe en Workers Free.", and one next to the p99 card title SHALL say "El 99 % de las peticiones usa menos CPU que esta cifra: muestra las más pesadas. Cloudflare tolera peticiones sueltas sobre 10 ms; la señal de peligro son las peticiones cortadas." (P5)
 
 ### Each site's page
 - R14. The system SHALL add the columns "CPU p50 (ms)", "CPU p99 (ms)" and "Cortadas" to the "Tráfico diario" table.
@@ -77,3 +77,6 @@ Show, per site, the CPU time per request of its Workers and the requests Cloudfl
 - **P4.** One CPU chart with every script would have about 10 lines. How is it drawn?
   A (recommended): one CPU chart and one "cortadas" chart per account (COBTEC, SOMA, BORAEI), each with its scripts. B: a single chart with all scripts. C: a single chart with only the scripts assigned to sites.
   **Answer:** A (2026-11-24). Applied in R10 and R11.
+- **P5.** In the local test of T6, one card with p50 and p99 of every script on one scale flattened the p50 (about 1 ms) under the p99 (about 100 ms), and the p50 is the figure that warns. How are they drawn?
+  A (recommended): a p50 card and a p99 card per account, each with its own scale. B: keep one card.
+  **Answer:** A (2026-11-27), with the three cards of an account (p50, p99, cut) in one row; the 10 ms line only on the p50 card, because on the p99 it would only look alarming (2026-11-27). Applied in R10, R11 and R13. A fourth series color was not added: it failed the all-pairs check in both themes; each script keeps one color in the three cards.

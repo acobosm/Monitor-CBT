@@ -23,6 +23,11 @@ export function formatBytes(value: number | null | undefined): string {
   return `${unit === 0 ? numbers.format(scaled) : oneDecimal.format(scaled)} ${units[unit]}`;
 }
 
+/** Spec 004 R20: milliseconds with one decimal, e.g. "8,7 ms". */
+export function formatMs(value: number | null | undefined): string {
+  return value === null || value === undefined ? NO_VALUE : `${oneDecimal.format(value)} ms`;
+}
+
 export function formatPercent(value: number): string {
   return `${oneDecimal.format(value)} %`;
 }

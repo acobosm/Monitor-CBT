@@ -518,6 +518,11 @@ main {
   margin-bottom: var(--space-5);
 }
 
+/* Spec 004: p50, p99 and requests cut of an account side by side while they fit. */
+.cpu-cards {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .usage-card {
   display: grid;
   gap: var(--space-4);
@@ -643,7 +648,14 @@ main {
   list-style: none;
 }
 
+/* The swatch keeps its 16 px: `.line-chart svg` would stretch it to the full width and squeeze the names. */
+.line-chart .legend svg {
+  flex: none;
+  width: 16px;
+}
+
 .legend li {
+  white-space: nowrap;
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
@@ -655,7 +667,8 @@ main {
   color: var(--ink-muted);
 }
 
-.line-chart .limit line {
+.line-chart .limit line,
+.legend .limit line {
   stroke: var(--ink-muted);
   stroke-width: 1.5;
   stroke-dasharray: 6 4;

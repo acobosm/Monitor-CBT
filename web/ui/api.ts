@@ -39,12 +39,22 @@ export interface UsageChart {
   points: DayPoint[];
 }
 
+/** Spec 004: daily Workers CPU of one script of an account (src/logic/cpu.ts). */
+export interface ScriptCpuSeries {
+  script: string;
+  label: string;
+  p50: DayPoint[];
+  p99: DayPoint[];
+  cut: DayPoint[];
+}
+
 export interface AccountUsage {
   id: string;
   name: string;
   live: boolean;
   rows: UsageRow[];
   charts: UsageChart[];
+  cpu: ScriptCpuSeries[];
   limitsCheckedText: string;
   unclassifiedText: string | null;
 }

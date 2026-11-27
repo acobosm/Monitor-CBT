@@ -65,6 +65,7 @@ const account = (change: Partial<AccountUsage> = {}): AccountUsage => ({
   limitsCheckedText: "Límites verificados",
   unclassifiedText: null,
   charts: [],
+  cpu: [],
   ...change,
 });
 
